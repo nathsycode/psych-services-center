@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "icon": "Award",
+    "title": "Licensed Professionals",
+    "description": "All our therapists and psychologists are licensed, experienced, and committed to your wellbeing."
+  },
+  {
+    "id": 2,
+    "icon": "Shield",
+    "title": "Confidential & Safe",
+    "description": "Your privacy is our priority. All sessions and records are kept strictly confidential."
+  },
+  {
+    "id": 3,
+    "icon": "Calendar",
+    "title": "Flexible Scheduling",
+    "description": "Book appointments that fit your schedule with convenient online and in-person options."
+  },
+  {
+    "id": 4,
+    "icon": "Heart",
+    "title": "Evidence-Based Care",
+    "description": "We use proven therapeutic approaches tailored to your unique needs and goals."
+  }
+]

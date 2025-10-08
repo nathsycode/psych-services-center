@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "title": "Online Mental Health Consultation",
+    "shortDesc": "Connect with licensed therapists from the comfort of your home through secure video sessions.",
+    "fullDesc": "Our online consultation service provides flexible, confidential mental health support through video calls. Perfect for those with busy schedules or limited mobility.",
+    "icon": "Video",
+    "features": [
+      "Secure video platform",
+      "Flexible scheduling",
+      "Licensed professionals",
+      "Follow-up support"
+    ],
+    "duration": "50 minutes",
+    "type": "online"
+  },
+  {
+    "id": 2,
+    "title": "In-Person Psychological Assessment",
+    "shortDesc": "Comprehensive psychological evaluations conducted by experienced psychologists in our comfortable clinic.",
+    "fullDesc": "Our in-person assessments provide thorough psychological evaluations including cognitive testing, personality assessments, and clinical interviews.",
+    "icon": "Clipboard",
+    "features": [
+      "Comprehensive testing",
+      "Detailed report",
+      "Face-to-face interaction",
+      "Comfortable environment"
+    ],
+    "duration": "2-3 hours",
+    "type": "in-person"
+  }
+]

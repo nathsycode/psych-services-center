@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Sarah M.",
+    "role": "Online Consultation Client",
+    "content": "The online consultation made it so easy to get help when I needed it most. My therapist was understanding and professional.",
+    "rating": 5,
+    "initial": "S"
+  },
+  {
+    "id": 2,
+    "name": "James K.",
+    "role": "Psychological Assessment Client",
+    "content": "The assessment process was thorough yet comfortable. The detailed report helped me understand myself better and plan my next steps.",
+    "rating": 5,
+    "initial": "J"
+  },
+  {
+    "id": 3,
+    "name": "Maria L.",
+    "role": "Online Consultation Client",
+    "content": "Flexible scheduling and compassionate care. I finally found a service that works with my busy life. Highly recommend!",
+    "rating": 5,
+    "initial": "M"
+  }
+]
