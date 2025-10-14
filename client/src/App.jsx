@@ -12,7 +12,7 @@ export default function App() {
     <Router>
       <div className="flex flex-col min-h-screen bg-slate-50">
         <Navbar />
-        <main className="flex-grow">
+        <main className="flex-grow w-full">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/booking" element={<Booking />} />
