@@ -44,7 +44,7 @@ export default function Navbar() {
           <div className="hidden md:block">
             <Link
               to="/booking"
-              className="bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition-all hover:shadow-lg hover:scale-105"
+              className="inline-block bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition-all duration-300 hover:shadow-lg hover:scale-105"
             >
               Book Now
             </Link>

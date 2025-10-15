@@ -1,5 +1,5 @@
 import Hero from '../components/home/Hero';
-// import ServicesSection from '../components/home/ServicesSection';
+import ServicesSection from '../components/home/ServicesSection';
 // import WhyChooseUs from '../components/home/WhyChooseUs';
 // import Testimonials from '../components/home/Testimonials';
 // import StatsSection from '../components/home/StatsSection';
@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <div className="w-full">
       <Hero />
-      {/* <ServicesSection /> */}
+      <ServicesSection />
       {/* <WhyChooseUs /> */}
       {/* <Testimonials /> */}
       {/* <StatsSection /> */}
