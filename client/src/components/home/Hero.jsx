@@ -20,7 +20,7 @@ export default function Hero() {
           Starts Here
         </h1>
         <p className="text-lg md:text-xl text-slate-600 mb-10 max-x-2xl mx-auto">
-          Connect with licensed therapists and psychologists for confidential, professional
+          Connect with licensed therapists and psychologists for confidential, professional mental health services.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
           <Link
