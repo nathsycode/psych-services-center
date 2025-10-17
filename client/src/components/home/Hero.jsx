@@ -1,7 +1,35 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Video, Clipboard } from 'lucide-react'
+import { Clipboard, Video, Award, Shield, Calendar, Heart } from 'lucide-react'
 
 export default function Hero() {
+
+  const features = [
+    {
+      icon: Award,
+      title: 'Licensed Professionals',
+      hoverColor: 'hover:text-blue-500',
+      lightBg: 'bg-blue-500/10',
+    },
+    {
+      icon: Shield,
+      title: 'Confidential & Safe',
+      hoverColor: 'hover:text-cyan-500',
+      lightBg: 'bg-cyan-500/10',
+    },
+    {
+      icon: Calendar,
+      title: 'Flexible Scheduling',
+      hoverColor: 'hover:text-teal-500',
+      lightBg: 'bg-teal-500/10',
+    },
+    {
+      icon: Heart,
+      title: 'Evidence-Based Care',
+      hoverColor: 'hover:text-purple-500',
+      lightBg: 'bg-purple-500/10',
+    },
+  ];
+
   return (
     <section className="relative bg-gradient-to-br from-blue-50 via-white to-cyan-50 py-20 lg:py-28 overflow-hidden w-full">
       <div className="absolute inset-0 overflow-hidden">
@@ -38,30 +66,15 @@ export default function Hero() {
         </div>
 
         <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-slate-600">
-          <div className="flex items-center space-x-2 hover:text-primary transition:colors">
-            <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <span className="font-medium">Licensed Professionals</span>
-          </div>
-          <div className="flex items-center space-x-2 hover:text-primary transition:colors">
-            <div className="w-10 h-10 bg-accent/10 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <span className="font-medium">100% Confidential</span>
-          </div>
-          <div className="flex items-center space-x-2 hover:text-primary transition:colors">
-            <div className="w-10 h-10 bg-slate-500/10 rounded-full flex items-center justify-center">
-              <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <span className="font-medium">Flexible Scheduling</span>
-          </div>
+          {features.map((feature) => {
+            return (
+              <div className={`flex items-center space-x-2 ${feature.hoverColor} transition:colors duration-300`}>
+                <div className={`flex items-center justify-center w-10 h-10 ${feature.lightBg} rounded-full`}>
+                  <feature.icon className="w-5 h-5" />
+                </div>
+                <span className="font-medium">{feature.title}</span>
+              </div>)
+          })}
         </div>
       </div>
     </section>

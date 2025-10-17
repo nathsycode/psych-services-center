@@ -3,9 +3,11 @@
     "id": 1,
     "name": "Sarah M.",
     "role": "Online Consultation Client",
-    "content": "The online consultation made it so easy to get help when I needed it most. My therapist was understanding and professional.",
+    "content": "The online consultation made it easy to get help when I needed it most. My therapist was understanding and professional. Highly recommend!",
     "rating": 5,
-    "initial": "S"
+    "initials": "SM",
+    "bgColor": "bg-blue-500",
+    "delay": 0
   },
   {
     "id": 2,
@@ -13,14 +15,48 @@
     "role": "Psychological Assessment Client",
     "content": "The assessment process was thorough yet comfortable. The detailed report helped me understand myself better and plan my next steps.",
     "rating": 5,
-    "initial": "J"
+    "initials": "JK",
+    "bgColor": "bg-cyan-500",
+    "delay": 100
   },
   {
     "id": 3,
     "name": "Maria L.",
     "role": "Online Consultation Client",
-    "content": "Flexible scheduling and compassionate care. I finally found a service that works with my busy life. Highly recommend!",
+    "content": "Flexible scheduling and compassionate care. I finally found a service that works with my busy life. The therapist really listened to my concerns.",
     "rating": 5,
-    "initial": "M"
+    "initials": "ML",
+    "bgColor": "bg-teal-500",
+    "delay": 200
+  },
+  {
+    "id": 4,
+    "name": "David R.",
+    "role": "Psychological Assessment Client",
+    "content": "Professional, thorough, and genuinely caring. The team made me feel comfortable throughout the entire assessment process. Best decision I made.",
+    "rating": 5,
+    "initials": "DR",
+    "bgColor": "bg-purple-500",
+    "delay": 300
+  },
+  {
+    "id": 5,
+    "name": "Emily T.",
+    "role": "Online Consultation Client",
+    "content": "I was nervous about online therapy, but the platform is so easy to use. My therapist helped me work through my anxiety in just a few sessions.",
+    "rating": 5,
+    "initials": "ET",
+    "bgColor": "bg-blue-500",
+    "delay": 400
+  },
+  {
+    "id": 6,
+    "name": "Michael C.",
+    "role": "Psychological Assessment Client",
+    "content": "The comprehensive assessment gave me clarity on my mental health. The recommendations were practical and the follow-up support has been invaluable.",
+    "rating": 5,
+    "initials": "MC",
+    "bgColor": "bg-cyan-500",
+    "delay": 500
   }
 ]

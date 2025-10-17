@@ -69,7 +69,7 @@ export default function ServicesSection() {
                   }}
                 >
                   <div
-                    className="absolute w-full h-full bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-slate-200"
+                    className="absolute w-full h-full bg-gradient-to-br from-blue-50 to-cyan-50 hover:bg-gradient-to-tl rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-slate-200"
                     style={{ backfaceVisibility: 'hidden' }}
                   >
                     <div className="flex flex-col h-full">
@@ -84,7 +84,7 @@ export default function ServicesSection() {
                   </div>
 
                   <div
-                    className="absolute w-full h-full bg-gradient-to-br from-primary to-accent rounded-2xl p-8 shadow-lg hover:shadow-lg text-white"
+                    className="absolute w-full h-full bg-gradient-to-br from-primary to-accent rounded-2xl p-8 shadow-lg hover:shadow-2xl text-white"
                     style={{
                       backfaceVisibility: 'hidden',
                       transform: 'rotateY(180deg)',
