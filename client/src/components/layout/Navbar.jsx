@@ -68,16 +68,17 @@ export default function Navbar() {
                 key={link.path}
                 to={link.path}
                 onClick={() => setIsOpen(false)}
-                className={`block px-4 py-2 rounded-lg transition-colors ${isActive(link.path) ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                className={`relative block px-4 py-2 font-medium ${isActive(link.path) ? 'text-primary' : 'text-slate-600'}`}
               >
                 {link.name}
+                {isActive(link.path) && <span className="absolute bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500 to-cyan-500 transform transition-transform origin-left duration-300 scale-x-100" />}
               </Link>
             ))}
           </div>
           <Link
             to="/booking"
             onClick={() => setIsOpen(false)}
-            className="block mx-4 text-center bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors">
+            className="block mx-4 mb-4 text-center bg-primary text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-600 transition-colors">
             Book Now
           </Link>
         </div>

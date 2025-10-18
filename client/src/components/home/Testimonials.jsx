@@ -80,7 +80,11 @@ export default function Testimonials() {
                 <p className="text-slate-600 mb-6 leading-relaxed italic">{testimonial.content}</p>
 
                 <div className="flex items-center space-x-4 border-t border-slate-200 pt-6">
-                  <div className={`w-12 h-12 ${testimonial.bgColor} rounded-full flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform duration-300`}>{testimonial.initials}</div>
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition-transform duration-300"
+                    style={{ backgroundColor: testimonial.bgColor }}
+                  >
+                    {testimonial.initials}</div>
                   <div>
                     <p className="font-semibold text-slate-900">{testimonial.name}</p>
                     <p className="text-sm text-slate-600">{testimonial.role}</p>
@@ -118,7 +122,9 @@ export default function Testimonials() {
                     <p className="text-slate-600 mb-6 leading-relaxed italic">{testimonial.content}</p>
 
                     <div className="flex items-center space-x-4 border-t border-slate-200 pt-6">
-                      <div className={`w-12 h-12 ${testimonial.bgColor} rounded-full flex items-center justify-center text-white font-bold text-lg`}>
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                        style={{ backgroundColor: testimonial.bgColor }}>
                         {testimonial.initials}
                       </div>
                       <div>
