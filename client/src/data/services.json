@@ -12,7 +12,8 @@
       "Follow-up support"
     ],
     "duration": "50 minutes",
-    "type": "online"
+    "type": "online",
+    "delay": "0"
   },
   {
     "id": 2,
@@ -27,6 +28,7 @@
       "Comfortable environment"
     ],
     "duration": "2-3 hours",
-    "type": "in-person"
+    "type": "in-person",
+    "delay": "100"
   }
 ]

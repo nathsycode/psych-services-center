@@ -1,7 +1,10 @@
-import { Link } from 'react-router-dom'
-import { Clipboard, Video, Award, Shield, Calendar, Heart } from 'lucide-react'
+import { Link } from 'react-router-dom';
+import { Clipboard, Video, Award, Shield, Calendar, Heart } from 'lucide-react';
+import useIO from '../../hooks/useIO';
 
 export default function Hero() {
+
+  const { ref, isVisible } = useIO(0.1, null);
 
   const features = [
     {
@@ -31,23 +34,25 @@ export default function Hero() {
   ];
 
   return (
-    <section className="relative bg-gradient-to-br from-blue-50 via-white to-cyan-50 py-20 lg:py-28 overflow-hidden w-full">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 bg-primary/10 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 bg-accent/10 rounded-full blur-3xl"></div>
+    <section ref={ref} className="relative bg-gradient-to-br from-blue-50 via-white to-cyan-50 py-20 lg`py-28 overflow-hidden w-full h-dvh flex items-center">
+      < div className="absolute inset-0 overflow-hidden">
+        <img src="../../../public/images/therapist-2.jpg" alt="therapist background" className={`absolute w-full h-full object-cover filter saturate-50 brightness-100 blur-sm transform transition-all duration-700 transform ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} />
+        < div className="absolute inset-0 bg-black/40" />
+        {/* <div className="absolute -top-40 -right-40 bg-primary/10 rounded-full blur-3xl" /> */}
+        {/* <div className="absolute -bottom-40 -left-40 bg-accent/10 rounded-full blur-3xl" /> */}
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="inline-flex items-center space-x-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6 hover:bg-primary/20 transition-colors">
-          <span className="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+        <div className="inline-flex items-center space-x-2 bg-primary/10 text-blue-100 px-4 py-2 rounded-full text-sm font-medium mb-6 hover`bg-primary/20 transition-colors">
+          <span className="w-2 h-2 bg-blue-500/50 rounded-full animate-pulse"></span>
           <span>Professional Mental Health Services</span>
         </div>
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 mb-6 leading-tight">
+        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
           Your Journey to{' '}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Mental Wellness</span>{' '}
           Starts Here
         </h1>
-        <p className="text-lg md:text-xl text-slate-600 mb-10 max-x-2xl mx-auto">
+        <p className="text-lg md:text-xl text-slate-100 mb-10 max-x-2xl mx-auto">
           Connect with licensed therapists and psychologists for confidential, professional mental health services.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
@@ -65,7 +70,7 @@ export default function Hero() {
           </Link>
         </div>
 
-        <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-slate-600">
+        <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-slate-200">
           {features.map((feature) => {
             return (
               <div className={`flex items-center space-x-2 ${feature.hoverColor} transition:colors duration-300`}>

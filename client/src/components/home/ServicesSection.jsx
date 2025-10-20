@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom'
 import { Video, Clipboard, ArrowRight } from 'lucide-react';
 import servicesData from '../../data/services.json';
+import useIO from '../../hooks/useIO';
 
 export default function ServicesSection() {
   const [flipped, setFlipped] = useState({});
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [hoveredCard, setHoveredCard] = useState(null);
+  const { ref, visibleItems } = useIO();
 
   const handleMouseMove = (e, cardId) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -33,16 +35,20 @@ export default function ServicesSection() {
           <p className="text-xl text-slate-600 max-w-2xl mx-auto">Choose the mental health support that works best for you</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <div ref={ref} className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {servicesData.map((service) => {
             const Icon = iconMap[service.icon];
             const isFlipped = flipped[service.id];
             const isHovered = hoveredCard === service.id;
+            const isVisible = visibleItems[service.id];
 
             return (
               <div
                 key={service.id}
-                className={`h-96 relative ${!isFlipped ? 'cursor-none' : 'cursor-auto'}`}
+                data-item-id={service.id}
+                data-delay={service.delay}
+                className={`h-96 relative ${!isFlipped ? 'cursor-none' : 'cursor-auto'} transition-all duration-700 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-30 translate-y-8'
+                  }`}
                 onClick={() => toggleFlip(service.id)}
                 onMouseEnter={() => setHoveredCard(service.id)}
                 onMouseLeave={() => setHoveredCard(null)}
