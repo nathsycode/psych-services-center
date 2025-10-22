@@ -98,41 +98,45 @@ export default function StatsSection() {
     {
       id: 1,
       icon: Users,
-      label: 'Clients Helped',
+      label: 'Clients Helped.',
+      description: "We have supported over 500 individuals on their mental wellness journey, providing personalized care that makes a real difference in their lives.",
       value: 500,
       suffix: '+',
       type: 'counter',
-      color: 'from-blue-500 to-blue-600',
+      hoverColor: 'group-hover:text-blue-500',
       delay: 0,
     },
     {
       id: 2,
       icon: TrendingUp,
-      label: 'Success Rate',
+      label: 'Success Rate.',
+      description: 'Our evidence-based approaches and dedicated professionals have helped 92% of our clients achieve their therapeutic goals and improve their wellbeing.',
       value: 92,
       suffix: '%',
       type: 'progress',
-      color: 'from-cyan-500 to-cyan-600',
+      hoverColor: 'group-hover:text-cyan-500',
       delay: 100,
     },
     {
       id: 3,
       icon: Award,
-      label: 'Years Experience',
+      label: 'Years Experience.',
+      description: 'With over 15 years of combined expertise in psychology and counseling, our team brings deep knowledge and proven methods to every session.',
       value: 15,
       suffix: '+',
       type: 'counter',
-      color: 'from-teal-500 to-teal-600',
+      hoverColor: 'group-hover:text-teal-500',
       delay: 200,
     },
     {
       id: 4,
       icon: Heart,
-      label: 'Sessions  Monthly',
+      label: 'Sessions  Monthly.',
+      description: 'We conduct over 200 sessions each month, providing consistent support and building lasting relationships with our clients throughout their journey.',
       value: 200,
       suffix: '+',
       type: 'counter',
-      color: 'from-purple-500 to-purple-600',
+      hoverColor: 'group-hover:text-purple-500',
       delay: 300,
     },
   ]
@@ -171,63 +175,58 @@ export default function StatsSection() {
 
         <div
           ref={sectionRef}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto"
+          className="grid grid-cols-1 md:grid-cols-4 gap-12 items-center x-4"
         >
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            const isVisible = visibleStats[stat.id];
+          <div className="hidden lg:block lg:col-span-1">
+            <img src="/images/impact.jpg" alt="just a happy photo" className="rounded-2xl h-full w-full object-cover sticky top-8 filter saturate-50" />
+          </div>
+          <div className="lg:col-span-3 space-y-0">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              const isVisible = visibleStats[stat.id];
 
-            return (
-              <div
-                key={stat.id}
-                data-stat-id={stat.id}
-                data-delay={stat.delay}
-                className={`group transition-all duration-700 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-                  }`}
-              >
-                <div className="h-full bg-white rounded-2xl p-8 shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border border-slate-200">
-                  <div className={`inline-flex bg-gradient-to-br ${stat.color} p-4 rounded-xl mb-6 group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300`}>
-                    <Icon className="w-8 h-8 text-white" />
+              return (
+                <div
+                  key={stat.id}
+                  data-stat-id={stat.id}
+                  data-delay={stat.delay}
+                  className={`grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 border-b border-slate-200 last:border-b-0 py-8 px-4 group hover:bg-gradient-to-br hover:from-blue-50 hover:to-cyan-50 hover:-translate-y-1 transition-all duration-700 transform ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+                    }`}
+                >
+                  <div className="sm:col-span-1 flex flex-col items-center sm:items-start justify-center gap-2">
+                    <Icon className={`w-4 h-4 text-slate-400 ${stat.hoverColor} transition-colors duration-300`} />
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-5xl font-bold text-slate-900">
+                        {isVisible ? <CounterAnimation end={stat.value} /> : 0}
+                      </span>
+                      <span className={`text-3xl font-bold text-slate-400 ${stat.hoverColor}`}>{stat.suffix}</span>
+                    </div>
+
+                  </div>
+                  <div className="sm:col-span-3 flex flex-col justify-center">
+                    <h2 className="text-2xl font-semibold text-slate-900 mb-2">{stat.label}
+                      <span className="text-base font-light text-slate-600 leading-relaxed"> {stat.description}</span>
+                    </h2>
                   </div>
 
-                  <div className="flex justify-center mb-6">
-                    {stat.type === 'progress' ? (
-                      isVisible && <CircularProgress percentage={stat.value} />
-                    ) : (
-
-                      <div className="relative inline-flex items-center justify-center">
-                        <svg width="120" height='120' className='transform -rotate-90 opacity-20'>
-                          <circle
-                            cx='60'
-                            cy='60'
-                            r='52'
-                            fill='none'
-                            stroke='#e2e8f0'
-                            strokeWidth='8'
-                          />
-                        </svg>
-
-                        <div className='absolute text-center'>
-                          <div className='text-4xl font-bold text-slate-900'>
-                            {isVisible ? <CounterAnimation end={stat.value} /> : 0}
-                          </div>
-                          <div className="text-lg font-semibold text-slate-600">{stat.suffix}</div>
-                        </div>
-                      </div>
-                    )
-                    }
-                  </div>
-
-                  <h3 className="text-xl font-semibold text-slate-900 text-center">{stat.label}</h3>
-
-                  <div className={`h-1 w-0 bg-gradient-to-r ${stat.color} mx-auto  mt-4 group-hover:w12 transition-all  duration-300`} />
 
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+
+          </div>
         </div>
       </div>
     </section>
   )
 }
+// {
+//   id: 4,
+//   icon: Heart,
+//   label: 'Sessions  Monthly',
+//   value: 200,
+//   suffix: '+',
+//   type: 'counter',
+//   color: 'from-purple-500 to-purple-600',
+//   delay: 300,
+// },

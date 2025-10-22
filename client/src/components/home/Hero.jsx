@@ -36,7 +36,7 @@ export default function Hero() {
   return (
     <section ref={ref} className="relative bg-gradient-to-br from-blue-50 via-white to-cyan-50 py-20 lg`py-28 overflow-hidden w-full h-dvh flex items-center">
       < div className="absolute inset-0 overflow-hidden">
-        <img src="../../../public/images/therapist-2.jpg" alt="therapist background" className={`absolute w-full h-full object-cover filter saturate-50 brightness-100 blur-sm transform transition-all duration-700 transform ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} />
+        <img src="/images/therapist-2.jpg" alt="therapist background" className={`absolute w-full h-full object-cover filter saturate-50 brightness-100 blur-sm transform transition-all duration-700 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} />
         < div className="absolute inset-0 bg-black/40" />
         {/* <div className="absolute -top-40 -right-40 bg-primary/10 rounded-full blur-3xl" /> */}
         {/* <div className="absolute -bottom-40 -left-40 bg-accent/10 rounded-full blur-3xl" /> */}
@@ -44,7 +44,7 @@ export default function Hero() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="inline-flex items-center space-x-2 bg-primary/10 text-blue-100 px-4 py-2 rounded-full text-sm font-medium mb-6 hover`bg-primary/20 transition-colors">
-          <span className="w-2 h-2 bg-blue-500/50 rounded-full animate-pulse"></span>
+          <span className="w-2 h-2 bg-blue-400/75 rounded-full animate-pulse"></span>
           <span>Professional Mental Health Services</span>
         </div>
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
