@@ -13,7 +13,9 @@
     ],
     "duration": "50 minutes",
     "type": "online",
-    "delay": "0"
+    "delay": "0",
+    "link": "https://calendly.com/nathsycode/in-person-psychological-assessment",
+    "hash": "#consultation"
   },
   {
     "id": 2,
@@ -29,6 +31,8 @@
     ],
     "duration": "2-3 hours",
     "type": "in-person",
-    "delay": "100"
+    "delay": "100",
+    "link": "https://calendly.com/nathsycode/in-person-psychological-assessment",
+    "hash": "#assessment"
   }
 ]

@@ -57,13 +57,13 @@ export default function Hero() {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
           <Link
-            to="/booking"
+            to="/booking#consultation"
             className="group w-full sm:w-auto bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-600 transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center justify-center space-x-2">
             <span>Book Online Consultation</span>
             <Video className="w-5 h-5 group-hover:rotate-12 transition-transform"></Video>
           </Link>
           <Link
-            to="/booking"
+            to="/booking#assessment"
             className="group w-full sm:w-auto bg-white text-primary border-2 border-primary px-8 py-4 rounded-lg font-semibold hover:bg-primary hover:text-white transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center justify-center space-x-2">
             <span>Schedule Assessment</span>
             <Clipboard className="w-5 h-5 group-hover:-rotate-12 transition-transform"></Clipboard>

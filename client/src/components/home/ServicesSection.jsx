@@ -119,7 +119,7 @@ export default function ServicesSection() {
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">{service.duration}</span>
                         <Link
-                          to="/booking"
+                          to={`booking${service.hash}`}
                           className="inline-block bg-white text-primary px-4 py-2 rounded-lg font-semibold hover:bg-slate-100 transition-all duration-300 hover:scale-105"
                           onClick={(e) => e.stopPropagation()}
                         >
