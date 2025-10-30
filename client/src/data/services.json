@@ -14,8 +14,8 @@
     "duration": "50 minutes",
     "type": "online",
     "delay": "0",
-    "link": "https://calendly.com/nathsycode/in-person-psychological-assessment",
-    "hash": "#consultation"
+    "link": "https://nathsycode.neetocal.com/meeting-with-nath-sy",
+    "shortName": "consultation"
   },
   {
     "id": 2,
@@ -33,6 +33,6 @@
     "type": "in-person",
     "delay": "100",
     "link": "https://calendly.com/nathsycode/in-person-psychological-assessment",
-    "hash": "#assessment"
+    "shortName": "#assessment"
   }
 ]
