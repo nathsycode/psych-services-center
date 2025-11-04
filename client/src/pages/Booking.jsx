@@ -11,21 +11,11 @@ import { Video, Clipboard } from 'lucide-react';
 
 export default function Booking() {
   const { ref, isVisible } = useIO(0.1, null);
-  const [activated, setActivated] = useState(null);
   const location = useLocation();
   const [selectedService, setSelectedService] = useState(null);
 
-  const toggleActivated = (id) => {
-    setActivated((prev) => (prev === id ? null : id));
-  }
-
   const handleServiceChange = (service) => {
     setSelectedService(service);
-  }
-
-  const iconMap = {
-    'Video': Video,
-    'Clipboard': Clipboard,
   }
 
   useEffect(() => {
@@ -52,53 +42,15 @@ export default function Booking() {
         <p className='text-center text-slate-600' >Book your appointment with our professional mental health team. Choose the service that best fits your needs.</p>
       </div>
 
-      <div className='flex items-stretch justify-center gap-4 max-w-6xl mx-auto w-full'>
-        <ServiceSelection
-          selectedService={selectedService}
-          onServiceChange={handleServiceChange}
-        />
+      <ServiceSelection
+        selectedService={selectedService}
+        onServiceChange={handleServiceChange}
+      />
 
-        {/* {servicesData.map((service) => { */}
-        {/*   const isActive = activated === service.id; */}
-        {/*   const Icon = iconMap[service.icon] || null; */}
-        {/**/}
-        {/*   return ( */}
-        {/*     <div */}
-        {/*       key={service.id} */}
-        {/*       className={`relative cursor-pointer rounded-2xl p-8 shadow-lg border-2 bg-green-300 transition-all duration-500 ${isActive */}
-        {/*         ? 'flex-[3] bg-gradient-to-br from-primary to-accent border-primary' */}
-        {/*         : 'flex-[1] bg-white hover:bg-slate-50 border-slate-200 hover:border-primary'}`} */}
-        {/*       onClick={() => toggleActivated(service.id)} */}
-        {/*     > */}
-        {/**/}
-        {/*       <div className="h-full flex flex-col overflow-y-auto"> */}
-        {/*         <div className={`mb-4 transition-all duration-300 ${isActive ? 'text-white' : 'text-primary'}`}> */}
-        {/*           <Icon className="w-16 h-16" strokeWidth={0.5} /> */}
-        {/*         </div> */}
-        {/*         <h2>{service.title}</h2> */}
-        {/*         <p className={`mb-4 transition-all duration-300 ${isActive ? 'text-white/90' : 'text-slate-600'} ${!isActive && 'text-sm'}`}> */}
-        {/*           {service.shortDesc} */}
-        {/*         </p> */}
-        {/**/}
-        {/*       </div> */}
-        {/*       { */}
-        {/*         isActive && ( */}
-        {/*           <div> */}
-        {/*             <p className="text-center text-slate-600">{service.fullDesc}</p> */}
-        {/*             <ul> */}
-        {/*               {service.features.map((feature, idx) => ( */}
-        {/*                 <li key={idx}> */}
-        {/*                   {feature} */}
-        {/*                 </li> */}
-        {/*               ))} */}
-        {/*             </ul> */}
-        {/*           </div> */}
-        {/*         ) */}
-        {/*       } */}
-        {/*     </div> */}
-        {/*   ) */}
-        {/* })} */}
-      </div>
+
+      {/* {selectedService && ( */}
+      {/*   <div>{selectedService}</div> */}
+      {/* )} */}
     </section >
   );
 }
