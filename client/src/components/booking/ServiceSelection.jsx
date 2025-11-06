@@ -13,14 +13,16 @@ export function ServiceSelection({ selectedService, onServiceChange }) {
       text: 'text-primary',
       bg: 'bg-primary/20',
       dot: 'bg-primary',
-      hover: 'hover:border-primary/50'
+      hover: 'hover:border-primary/50',
+      buttonHover: 'hover:bg-primary/20'
     },
     'assessment': {
       border: 'border-accent',
       text: 'text-accent',
       bg: 'bg-accent/20',
       dot: 'bg-accent',
-      hover: 'hover:border-accent/50'
+      hover: 'hover:border-accent/50',
+      buttonHover: 'hover:bg-accent/20'
     },
   }
 
@@ -37,33 +39,45 @@ export function ServiceSelection({ selectedService, onServiceChange }) {
               : `border-slate-200 bg-white/80 backdrop-blur ${color.hover}`}`}
             onClick={() => onServiceChange(selectedService === service.shortName ? null : service.shortName)}
           >
-            <div className='flex flex-col items-start justify-between mb-4'>
+            <div className='flex items-start justify-between mb-4'>
               <div className={`p-3 rounded-lg ${selectedService === service.shortName ? `${color.dot}` : `${color.bg}`}`}>
                 <Icon className={`w-6 h-6 transition-colors duration-300 ${selectedService === service.shortName ? 'text-white' : `${color.text}`}`} />
-
               </div>
 
-              <h1 className={`text-lg transition-all duration-300 transform ${selectedService === service.shortName ? `${color.text}` : 'text-slate-900'
-                }`}>
-                {service.title}
-              </h1>
+              {selectedService === service.shortName && (
+                <button
+                  type="button"
+                  className={`absolute top-4 right-4 flex items-center justify-center rounded-full h-8 w-8 p-0 transition-colors duration-300 ${color.buttonHover}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onServiceChange(null);
+                  }}>
 
-              <p className="text-sm text-slate-600">{service.shortDesc}</p>
+                  <X className="w-4 h-4 text-slate-600" />
+                </button>
+              )}
 
-              <ul>
-                {service.features.map((feature) => (
-                  <li className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${color.dot}`}></span>
-                    {feature}
-                  </li>
 
-                ))}
-              </ul>
+            </div>
+            <h3 className={`text-lg transition-all duration-300 transform ${selectedService === service.shortName ? `${color.text}` : 'text-slate-900'
+              }`}>
+              {service.title}
+            </h3>
 
-              <div className="mt-4 pt-4 border-t border-slate-100 w-full">
-                <p className="text-sm text-slate-600">{service.duration}</p>
-              </div>
+            <p className="text-sm text-slate-600 mt-2 mb-4">{service.shortDesc}</p>
 
+            <ul className="space-y-2 text-sm text-slate-600">
+              {service.features.map((feature) => (
+                <li className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${color.dot}`}></span>
+                  {feature}
+                </li>
+
+              ))}
+            </ul>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 w-full">
+              <p className="text-sm text-slate-600">{service.duration}</p>
             </div>
           </div>
         )
