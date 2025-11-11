@@ -63,7 +63,7 @@ export default function Booking() {
         <p className='text-center text-slate-600 max-w-2xl mx-auto leading-relaxed' >Book your appointment with our professional mental health team. Choose the service that best fits your needs.</p>
       </div>
 
-      <div className={`w-full max-w-5xl relative z-10 transition-all duration-900 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+      <div className={`w-full max-w-5xl relative z-10`}>
         < ServiceSelection
           selectedService={selectedService}
           onServiceChange={handleServiceChange}

@@ -12,7 +12,7 @@ export default function WhyChooseUs() {
       title: 'Licensed Professionals',
       desc: 'All our therapists and psychologists are licensed, experienced, and committed to your wellbeing.',
       accentColor: 'from-blue-500 to-blue-600',
-      lightBg: 'bg-blue-50',
+      lightBg: 'bg-theme',
       delay: 0,
     },
     {

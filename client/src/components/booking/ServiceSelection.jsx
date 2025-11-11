@@ -1,7 +1,10 @@
 import { Video, Clipboard, X } from 'lucide-react';
 import ServicesData from '../../data/services'
+import useIO from '../../hooks/useIO'
 
 export function ServiceSelection({ selectedService, onServiceChange }) {
+  const { ref, visibleItems } = useIO();
+
   const iconMap = {
     'Video': Video,
     'Clipboard': Clipboard
@@ -27,16 +30,22 @@ export function ServiceSelection({ selectedService, onServiceChange }) {
   }
 
   return (
-    <div className='grid md:grid-cols-2 gap-6 mb-8'>
+    <div ref={ref} className='grid md:grid-cols-2 gap-6 mb-8'>
       {ServicesData.map((service) => {
         const Icon = iconMap[service.icon] || null
         const color = colorsMap[service.shortName] || colorsMap.consultation
+        const isVisible = visibleItems[service.id];
+        const delay = parseInt(service.delay) * 5 + 500
 
         return (
           <div
+            data-item-id={service.id}
+            data-delay={delay}
             className={`relative cursor-pointer rounded-2xl p-8 shadow-lg border-2 transition-all duration-500 ${selectedService === service.shortName
               ? `${color.border} shadow-md`
-              : `border-slate-200 bg-white/80 backdrop-blur ${color.hover}`}`}
+              : `border-slate-200 bg-white/80 backdrop-blur ${color.hover}`}
+            ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
+            `}
             onClick={() => onServiceChange(selectedService === service.shortName ? null : service.shortName)}
           >
             <div className='flex items-start justify-between mb-4'>
@@ -56,7 +65,6 @@ export function ServiceSelection({ selectedService, onServiceChange }) {
                   <X className="w-4 h-4 text-slate-600" />
                 </button>
               )}
-
 
             </div>
             <h3 className={`text-lg transition-all duration-300 transform ${selectedService === service.shortName ? `${color.text}` : 'text-slate-900'

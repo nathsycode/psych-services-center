@@ -85,19 +85,19 @@ export default function StatsSection() {
         </div>
 
         <div
-          className="grid grid-cols-1 lg:grid-cols-4 gap-12 items-center x-4"
+          className="flex flex-col gap-12 items-center x-4"
         >
-          <div className="hidden lg:block lg:col-span-1">
-            <img
-              ref={imageRef}
-              src="/images/impact.jpg"
-              alt="just a happy photo"
-              className={`rounded-2xl object-cover sticky top-8 saturate-50 transition-all duration-1000 transform ${imageVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
-              style={{ transitionDelay: '100ms' }}
-            />
-          </div>
+          {/* <div className="hidden lg:block lg:col-span-1"> */}
+          {/*   <img */}
+          {/*     ref={imageRef} */}
+          {/*     src="/images/impact.jpg" */}
+          {/*     alt="just a happy photo" */}
+          {/*     className={`rounded-2xl object-cover sticky top-8 saturate-50 transition-all duration-1000 transform ${imageVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} */}
+          {/*     style={{ transitionDelay: '100ms' }} */}
+          {/*   /> */}
+          {/* </div> */}
 
-          <div ref={statsRef} className="lg:col-span-3 space-y-0">
+          <div ref={statsRef} className="space-y-0 max-w-4xl">
             {stats.map((stat) => {
               const Icon = stat.icon;
               const isStatVisible = visibleItems[stat.id];

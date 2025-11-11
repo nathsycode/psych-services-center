@@ -1,17 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
     line-height: 1.5;
     font-weight: 400;
     color-scheme: light;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    -moz-osx-font-smoothing: grayscale;    
+    --color-primary: 0 129 167;     /* cerulean */
+    --color-accent: 0 175 185;      /* verdigris */
+    --color-muted: 190 178 200;     /* thistle */
+    --color-surface: 215 214 214;   /* timberwolf */
+    --color-text: 2 2 2;            /* black */
   }
 
   body {
@@ -21,5 +28,11 @@
   html,
   body {
     @apply w-full h-full;
+  }
+}
+
+@layer utilities {
+  .bg-brand-gradient {
+    @apply bg-gradient-to-r from-primary via-muted to-accent;
   }
 }
