@@ -75,13 +75,13 @@ export default function ServicesSection() {
                   }}
                 >
                   <div
-                    className="absolute w-full h-full bg-gradient-to-br from-blue-50 to-cyan-50 hover:bg-gradient-to-tl rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-slate-200"
+                    className="absolute w-full h-full bg-accent/5 hover:bg-accent/10 rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-slate-200"
                     style={{ backfaceVisibility: 'hidden' }}
                   >
                     <div className="flex flex-col h-full">
-                      {Icon && <Icon className="w-16 h-16 text-primary mb-6" />}
-                      <h3 className="text-2xl font-bold text-slate-900 mb-4">{service.title}</h3>
-                      <p className="text-slate-600 mb-6 flex-grow">{service.shortDescription}</p>
+                      {Icon && <Icon className="w-12 h-12 text-primary mb-6" strokeWidth="1.25" />}
+                      <h3 className="text-2xl font-semibold text-slate-900 mb-4">{service.title}</h3>
+                      <p className="text-slate-600 mb-6 flex-grow">{service.shortDesc}</p>
                       <div className={`flex items-center space-x-2 text-primary font-semibold transition-opacity duration-500 ${isHovered ? 'opacity-0' : 'opacity-100'}`}>
                         <span>Click to learn more</span>
                         <ArrowRight className="w-4 h-4"></ArrowRight>
@@ -90,7 +90,7 @@ export default function ServicesSection() {
                   </div>
 
                   <div
-                    className="absolute w-full h-full bg-gradient-to-br from-primary to-accent rounded-2xl p-8 shadow-lg hover:shadow-2xl text-white"
+                    className="absolute w-full h-full bg-primary rounded-2xl p-8 shadow-lg hover:shadow-2xl text-white"
                     style={{
                       backfaceVisibility: 'hidden',
                       transform: 'rotateY(180deg)',

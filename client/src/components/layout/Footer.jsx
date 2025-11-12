@@ -13,8 +13,8 @@ export default function Footer() {
   ];
 
   const services = [
-    { name: 'Online Consultation', path: '/booking' },
-    { name: 'Psychological Assessment', path: '/booking' },
+    { name: 'Online Consultation', path: '/booking#consultation' },
+    { name: 'Psychological Assessment', path: '/booking#assessment' },
     { name: 'Mental Health Resources', path: '/articles' },
   ];
 

@@ -67,7 +67,7 @@ export default function Testimonials() {
               className={`group transition-all duration-700 transform ${visibleCards[testimonial.id] ? 'opacity-100 transilate-y-0' : 'opacity-0 translate-y-8'
                 }`}
             >
-              <div className="h-full bg-slate-50 rounded-2xl p-8 shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2  border border-slate-200">
+              <div className="h-full flex flex-col bg-surface/10 rounded-2xl p-8 shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-2  border border-slate-200">
                 <div className="flex space-x-1 mb-4">
                   {Array.from({ length: testimonial.rating }).map((_, i) => (
                     <Star
@@ -77,7 +77,7 @@ export default function Testimonials() {
                     />
                   ))}
                 </div>
-                <p className="text-slate-600 mb-6 leading-relaxed italic">{testimonial.content}</p>
+                <p className="text-slate-600 mb-6 leading-relaxed italic flex-grow">{testimonial.content}</p>
 
                 <div className="flex items-center space-x-4 border-t border-slate-200 pt-6">
                   <div

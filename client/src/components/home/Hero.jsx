@@ -34,9 +34,9 @@ export default function Hero() {
   ];
 
   return (
-    <section ref={ref} className="relative py-20 lg`py-28 overflow-hidden w-full h-dvh flex items-center">
+    <section ref={ref} className="relative min-h-[90vh] md:h-screen py-16 md:py-24 overflow-hidden w-full h-dvh flex items-center">
       < div className="absolute inset-0 overflow-hidden">
-        <img src="/images/therapist-2.jpg" alt="therapist background" className={`absolute w-full h-full object-cover filter saturate-50 brightness-100 blur-sm transform transition-all duration-700 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} />
+        <img src="/images/therapist-2.jpg" alt="therapist background" className={`absolute w-full h-full object-cover filter saturate-50 brightness-75 blur-sm transform transition-all duration-700 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} />
         < div className="absolute inset-0 bg-black/40" />
         {/* <div className="absolute -top-40 -right-40 bg-primary/10 rounded-full blur-3xl" /> */}
         {/* <div className="absolute -bottom-40 -left-40 bg-accent/10 rounded-full blur-3xl" /> */}
@@ -47,10 +47,10 @@ export default function Hero() {
           <span className="w-2 h-2 bg-accent/75 rounded-full animate-pulse"></span>
           <span>Professional Mental Health Services</span>
         </div>
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+        <h1 className="text-4xl md:text-5xl lg:text-6xl 2xl:text-7xl font-bold text-white mb-6 leading-relaxed">
           Your Journey to{' '}
-          <span className="text-transparent bg-clip-text bg-surface">Mental Wellness</span>{' '}
-          Starts Here
+          <span className="text-transparent bg-clip-text bg-accent transition-colors duration-300 hover:bg-primary">Mental Wellness</span>{' '}
+          <span className="tracking-[0.03em]">Starts</span>{' '}Here
         </h1>
         <p className="text-lg md:text-xl text-slate-100 mb-10 max-x-2xl mx-auto">
           Connect with licensed therapists and psychologists for confidential, professional mental health services.

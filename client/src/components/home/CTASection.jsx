@@ -6,8 +6,8 @@ export default function CTASection() {
   const { ref, isVisible } = useIO(0.1, null);
 
   return (
-    <section className="py-20 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary via-blue-600 to-accent" />
+    <section className="py-20 min-h-dvh relative overflow-hidden flex items-center justify-center">
+      <div className="absolute inset-0 bg-primary" />
 
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-24 -right-24 h-96 w-96 bg-white/10 rounded-full blur-3xl" />
@@ -25,7 +25,7 @@ export default function CTASection() {
           </div>
 
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
-            Ready to Start Your Mental Welness Journey?
+            Ready to Start Your Mental Wellness Journey?
           </h2>
 
           <p className="text-xl text-white/90 mb-10 max-w-2xl mx-auto">
@@ -44,7 +44,7 @@ export default function CTASection() {
               to="/contact"
               className="group w-full sm:w-auto bg-transparent text-white border-2 border-white px-8 py-4 rounded-lg font-semibold hover:bg-white hover:text-primary transition-all duration-300 hover:shadow-2xl hover:scale-105 flex items-center justify-center space-x-2"
             >
-              <Phone className="w-5 h-5" />
+              <Phone className="w-5 h-5 group-hover:rotate-12" />
               <span>Contact Us First</span>
             </Link>
           </div>

@@ -24,7 +24,6 @@ const CounterAnimation = ({ end, duration = 2000 }) => {
   return count;
 }
 export default function StatsSection() {
-  const { ref: imageRef, isVisible: imageVisible } = useIO(0.1, null);
   const { ref: statsRef, visibleItems } = useIO(0.1, '[data-item-id]');
 
   const stats = [
@@ -36,7 +35,7 @@ export default function StatsSection() {
       value: 500,
       suffix: '+',
       type: 'counter',
-      hoverColor: 'group-hover:text-blue-500',
+      hoverColor: 'group-hover:text-primary',
       delay: 0,
     },
     {
@@ -47,7 +46,7 @@ export default function StatsSection() {
       value: 92,
       suffix: '%',
       type: 'progress',
-      hoverColor: 'group-hover:text-cyan-500',
+      hoverColor: 'group-hover:text-accent',
       delay: 100,
     },
     {
@@ -58,7 +57,7 @@ export default function StatsSection() {
       value: 15,
       suffix: '+',
       type: 'counter',
-      hoverColor: 'group-hover:text-teal-500',
+      hoverColor: 'group-hover:text-muted',
       delay: 200,
     },
     {
@@ -69,7 +68,7 @@ export default function StatsSection() {
       value: 200,
       suffix: '+',
       type: 'counter',
-      hoverColor: 'group-hover:text-purple-500',
+      hoverColor: 'group-hover:text-primary',
       delay: 300,
     },
   ]
@@ -107,7 +106,7 @@ export default function StatsSection() {
                   key={stat.id}
                   data-item-id={stat.id}
                   data-delay={stat.delay}
-                  className={`grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 border-b border-slate-200 last:border-b-0 py-8 px-4 group hover:bg-gradient-to-br hover:from-blue-50 hover:to-cyan-50 hover:-translate-y-1 transition-all duration-700 transform ${isStatVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
+                  className={`grid grid-cols-1 sm:grid-cols-4 gap-4 sm:gap-6 border-b border-slate-200 last:border-b-0 py-8 px-4 group hover:bg-slate-100 hover:-translate-y-1 transition-all duration-700 transform ${isStatVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}
                 >
                   <div className="sm:col-span-1 flex flex-col items-center sm:items-start justify-center gap-2">
                     <Icon className={`w-4 h-4 text-slate-400 ${stat.hoverColor} transition-colors duration-300`} />
