@@ -63,7 +63,7 @@ export default function ServicesSection() {
                       transform: 'translate(-50%, -50%)',
                     }}>
                     <div
-                      className="bg-slate-900 text-white text-xs font-semibold w-24 h-24 rounded-full shadow-lg flex items-center justify-center text-center">Click to learn more</div>
+                      className="bg-text text-white text-xs font-semibold w-24 h-24 rounded-full shadow-lg flex items-center justify-center text-center">Click to learn more</div>
                   </div>
                 )}
 
@@ -75,7 +75,7 @@ export default function ServicesSection() {
                   }}
                 >
                   <div
-                    className="absolute w-full h-full bg-accent/5 hover:bg-accent/10 rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-slate-200"
+                    className="absolute w-full h-full bg-accent/5 hover:bg-accent/10 rounded-2xl p-8 shadow-lg hover:shadow-2xl hover:border-text transition-all duration-300 border-2 border-slate-200"
                     style={{ backfaceVisibility: 'hidden' }}
                   >
                     <div className="flex flex-col h-full">

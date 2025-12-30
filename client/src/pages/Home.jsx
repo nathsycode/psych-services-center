@@ -4,6 +4,10 @@ import WhyChooseUs from '../components/home/WhyChooseUs';
 import Testimonials from '../components/home/Testimonials';
 import StatsSection from '../components/home/StatsSection';
 import CTASection from '../components/home/CTASection';
+import ChatWidget from '../components/chat/ChatWidget'
+
+// TODO: Why choose us section. Error on card 1.
+// TODO: Testimonials - Profile Icons bug.
 
 export default function Home() {
   return (
@@ -14,6 +18,7 @@ export default function Home() {
       <Testimonials />
       <StatsSection />
       <CTASection />
+      <ChatWidget />
     </div>
   );
 }

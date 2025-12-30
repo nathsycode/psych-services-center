@@ -34,7 +34,7 @@ export default function Hero() {
   ];
 
   return (
-    <section ref={ref} className="relative min-h-[90vh] md:h-screen py-16 md:py-24 overflow-hidden w-full h-dvh flex items-center">
+    <section ref={ref} className="relative min-h-[90vh] md:h-screen py-16 md:py-24 overflow-hidden w-full flex items-center">
       < div className="absolute inset-0 overflow-hidden">
         <img src="/images/therapist-2.jpg" alt="therapist background" className={`absolute w-full h-full object-cover filter saturate-50 brightness-75 blur-sm transform transition-all duration-700 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`} />
         < div className="absolute inset-0 bg-black/40" />
@@ -47,35 +47,35 @@ export default function Hero() {
           <span className="w-2 h-2 bg-accent/75 rounded-full animate-pulse"></span>
           <span>Professional Mental Health Services</span>
         </div>
-        <h1 className="text-4xl md:text-5xl lg:text-6xl 2xl:text-7xl font-bold text-white mb-6 leading-relaxed">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl 2xl:text-7xl font-bold text-white mb-6 leading-relaxed">
           Your Journey to{' '}
           <span className="text-transparent bg-clip-text bg-accent transition-colors duration-300 hover:bg-primary">Mental Wellness</span>{' '}
           <span className="tracking-[0.03em]">Starts</span>{' '}Here
         </h1>
-        <p className="text-lg md:text-xl text-slate-100 mb-10 max-x-2xl mx-auto">
+        <p className="text-base sm: text-lg md:text-xl text-slate-100 mb-10 max-x-2xl mx-auto">
           Connect with licensed therapists and psychologists for confidential, professional mental health services.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
           <Link
             to="/booking#consultation"
-            className="group w-full sm:w-auto bg-primary text-white px-8 py-4 rounded-lg font-semibold hover:bg-accent transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center justify-center space-x-2">
+            className="group w-full sm:w-auto bg-primary text-white px-8 py-4 text-sm sm:text-base rounded-lg font-semibold hover:bg-accent transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center justify-center space-x-2">
             <span>Book Online Consultation</span>
             <Video className="w-5 h-5 group-hover:rotate-12 transition-transform"></Video>
           </Link>
           <Link
             to="/booking#assessment"
-            className="group w-full sm:w-auto bg-white text-primary border-2 border-primary px-8 py-4 rounded-lg font-semibold hover:bg-primary hover:text-white transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center justify-center space-x-2">
+            className="group w-full sm:w-auto bg-white text-primary border-2 border-primary px-8 py-4 text-sm sm:text-base rounded-lg font-semibold hover:bg-primary hover:text-white transition-all duration-300 hover:shadow-xl hover:scale-105 flex items-center justify-center space-x-2">
             <span>Schedule Assessment</span>
             <Clipboard className="w-5 h-5 group-hover:-rotate-12 transition-transform"></Clipboard>
           </Link>
         </div>
 
-        <div className="flex flex-wrap justify-center items-center gap-8 text-sm text-slate-200">
+        <div className="flex flex-wrap justify-center items-center gap-4 sm:gap-6 md:gap-8 text-sm text-slate-200">
           {features.map((feature) => {
             return (
               <div className={`flex items-center space-x-2 ${feature.hoverColor} transition:colors duration-300`}>
-                <div className={`flex items-center justify-center w-10 h-10 ${feature.lightBg} rounded-full`}>
-                  <feature.icon className="w-5 h-5" />
+                <div className={`flex items-center justify-center w-8 h-8 ${feature.lightBg} rounded-full`}>
+                  <feature.icon className="w-4 h-4" />
                 </div>
                 <span className="font-medium">{feature.title}</span>
               </div>)
