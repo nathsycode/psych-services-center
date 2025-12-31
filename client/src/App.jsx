@@ -6,6 +6,7 @@ import Booking from './pages/Booking.jsx'
 import About from './pages/About.jsx'
 import Articles from './pages/Articles.jsx'
 import Contact from './pages/Contact.jsx'
+import ChatWidget from './components/chat/ChatWidget.jsx'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
 
           </Routes>
         </main>
+        <ChatWidget />
         <Footer />
 
       </div>
