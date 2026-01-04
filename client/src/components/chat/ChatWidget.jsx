@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { v4 as uuid } from 'uuid';
 import { MessageCircle, X, Send } from 'lucide-react';
+import { sendChatMessage } from '../../lib/chatApi';
 
 const STORAGE_KEY = "chat_widget_state";
 
@@ -20,9 +21,13 @@ function saveState(state) {
 export default function ChatWidget() {
   const stored = loadState();
 
+  const [mode, setMode] = useState("entry");
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState(stored?.messages || []);
   const [isTyping, setIsTyping] = useState(false);
+  const [context, setContext] = useState("");
+  const [lastIntent, setLastIntent] = useState(null);
 
   console.log(import.meta.env.VITE_CHAT_API_URL); // TODO: Delete this
 
@@ -58,6 +63,8 @@ export default function ChatWidget() {
   };
 
   const sendMessage = async (content) => {
+    if (isTyping) return;
+    setLastIntent(null);
     const userMsg = {
       id: uuid(),
       role: "user",
@@ -65,20 +72,37 @@ export default function ChatWidget() {
       timestamp: Date.now(),
     };
 
-    setMessages((m) => [...m, userMsg]);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setIsTyping(true);
 
+    try {
+      const data = await sendChatMessage({
+        sessionId,
+        message: content,
+        messages: updatedMessages.map(({ role, content }) => ({
+          role,
+          content,
+        })),
+        page: window.location.pathname,
+        context: context,
+      })
 
-    await new Promise((r) => setTimeout(r, 900));
+      const botMsg = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: data.reply,
+        timestamp: Date.now()
+      };
 
-    const botMsg = {
-      id: uuid(),
-      role: 'assistant',
-      content: 'Thanks for reaching out!',
-      timestamp: Date.now(),
+      setMessages((m) => [...m, botMsg]);
+
+      console.log("AI Intent", data.intent);
+      setLastIntent(data.intent);
+    } catch (err) {
+      console.error('Chat Error:', err);
     }
 
-    setMessages((m) => [...m, botMsg]);
     setIsTyping(false);
   }
 
@@ -118,7 +142,32 @@ export default function ChatWidget() {
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
           <ChatMessages messages={messages} isTyping={isTyping} />
-          <ChatInput onSend={sendMessage} />
+          {mode === "entry" && (
+            <EntryActions
+              onSelect={(choice) => {
+                if (choice === 'question') {
+                  setMode("question_type");
+                } else {
+                  console.log('testing for now');
+                  // handleDirectionAction(choice);
+                }
+              }}
+            />
+          )}
+          {mode === 'question_type' && (
+            <QuestionTypeAction
+              onSelect={(choice) => {
+                setContext({
+                  questionType: choice,
+                });
+                setMode('chat');
+              }}
+            />
+          )}
+          {/* <IntentActions intent={lastIntent} /> */}
+          {mode === "chat" && (
+            <ChatInput onSend={sendMessage} disabled={isTyping} />
+          )}
         </div>
       )
       }
@@ -200,30 +249,130 @@ function formatTime(timestamp) {
   });
 }
 
-function ChatInput({ onSend }) {
+function IntentActions({ intent }) {
+  if (!intent || intent == "unknown") return null
+
+  return (
+    <div className="border-t bg-slate-50 px-4 py-3">
+      {intent === 'booking' && (
+        <button
+          className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg:primary/90"
+          onClick={() =>
+            console.log('Booking flow')
+          }
+        >
+          Book A Session
+        </button>
+      )
+      }
+      {
+        intent === 'reschedule' && (
+          <button
+            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg:primary/90"
+          >
+            Reschedule Appointment
+          </button>
+        )
+      }
+    </div >
+  )
+}
+function ChatInput({ onSend, disabled }) {
   const [value, setValue] = useState("");
 
-  const submit = () => {
+  const submit = (e) => {
+    e.preventDefault();
+    if (disabled) return;
     if (!value.trim()) return;
+
     onSend(value.trim());
     setValue("");
   }
 
   return (
-    <div className="border-t p-3">
+    <form
+      onSubmit={submit}
+      className="border-t p-3"
+    >
       <div className="flex gap-2">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Type your message..."
-          className="flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+          disabled={disabled}
+          className='flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-sky-400'
         />
-        <button>
-          <Send strokeWidth='2' className='w-5 h-5 text-primary' />
+        <button
+          type='submit'
+          disabled={disabled}
+        >
+          <Send className='h-5 w-5 text-primary disabled:opacity-50' />
         </button>
       </div>
+    </form>
+  )
+}
+
+function EntryActions({ onSelect }) {
+  return (
+    <div className="space-y-2 p-4">
+      <p className="text-sm text-gray-700">How can we help today?</p>
+
+      <button
+        onClick={() => onSelect("schedule")}
+        className="w-full btn"
+      >
+        Schedule a session
+      </button>
+
+      <button
+        onClick={() => onSelect("reschedule")}
+        className="w-full btn"
+      >
+        Reschedule an appointment
+      </button>
+
+      <button
+        onClick={() => onSelect("question")}
+        className="w-full btn"
+      >
+        Ask a question
+      </button>
     </div>
   )
+}
 
+function QuestionTypeAction({ onSelect }) {
+  return (
+    <div className="space-y-2 p-4">
+      <p className="text-sm text-gray-700">I have a question about</p>
+
+      <button
+        onClick={() => onSelect("services")}
+        className="w-full btn"
+      >
+        Services
+      </button>
+
+      <button
+        onClick={() => onSelect("pricing")}
+        className="w-full btn"
+      >
+        Pricing
+      </button>
+
+      <button
+        onClick={() => onSelect("contact")}
+        className="w-full btn"
+      >
+        Contact & Logistics
+      </button>
+      <button
+        onClick={() => onSelect("other")}
+        className="w-full btn"
+      >
+        Something else
+      </button>
+    </div>
+  )
 }
