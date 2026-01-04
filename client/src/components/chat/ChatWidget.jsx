@@ -1,9 +1,51 @@
-import { useState, useEffect, useRef } from 'react';
-import { v4 as uuid } from 'uuid';
-import { MessageCircle, X, Send } from 'lucide-react';
-import { sendChatMessage } from '../../lib/chatApi';
+import { useState, useEffect, useRef } from "react";
+import { v4 as uuid } from "uuid";
+import { MessageCircle, X, Send, Undo2 } from "lucide-react";
+import { sendChatMessage } from "../../lib/chatApi";
 
 const STORAGE_KEY = "chat_widget_state";
+
+const entryActions = [
+  {
+    action: "appointment",
+    desc: "Schedule / Manage Appointment",
+    userMsg: "Can you help me schedule / manage an appointment?",
+    botMsg: "Sure! How would you like me to help?",
+    subactions: [
+      {
+        sub: "schedule",
+        subDesc: "Schedule",
+        userMsg: "I would like to schedule an appointment",
+        botMsg:
+          "Absolutely -- Are you looking for an online consultation or an in-person assessment?",
+      },
+      {
+        sub: "cancel",
+        subDesc: "Cancel",
+        userMsg: "I would like to cancel an upcoming appointment",
+        botMsg:
+          "Sorry to hear that. To proceed, kindly confirm your full name and email address.",
+      },
+      {
+        sub: "reschedule",
+        subDesc: "Reschedule",
+        userMsg: "I would like to reschedule an existing appointment",
+        botMsg:
+          "I'd love to assist -- To proceed, please provide your full name, email address and your preferred date and time for the new schedule.",
+      },
+    ],
+  },
+  {
+    action: "question",
+    desc: "Ask a Question",
+    subactions: [
+      { sub: "services", subDesc: "Our Services" },
+      { sub: "contact", subDesc: "Our Contact Information" },
+      { sub: "pricing", subDesc: "Our Pricing / Costs" },
+      { sub: "others", subDesc: "Other information" },
+    ],
+  },
+];
 
 function loadState() {
   try {
@@ -29,15 +71,9 @@ export default function ChatWidget() {
   const [context, setContext] = useState("");
   const [lastIntent, setLastIntent] = useState(null);
 
-  console.log(import.meta.env.VITE_CHAT_API_URL); // TODO: Delete this
+  const [sessionId] = useState(stored?.sessionId || crypto.randomUUID());
 
-  const [sessionId] = useState(
-    stored?.sessionId || crypto.randomUUID()
-  );
-
-  const [hasGreeted, setHasGreeted] = useState(
-    stored?.hasGreeted || false
-  )
+  const [hasGreeted, setHasGreeted] = useState(stored?.hasGreeted || false);
 
   useEffect(() => {
     saveState({
@@ -86,13 +122,13 @@ export default function ChatWidget() {
         })),
         page: window.location.pathname,
         context: context,
-      })
+      });
 
       const botMsg = {
         id: crypto.randomUUID(),
-        role: 'assistant',
+        role: "assistant",
         content: data.reply,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       };
 
       setMessages((m) => [...m, botMsg]);
@@ -100,11 +136,11 @@ export default function ChatWidget() {
       console.log("AI Intent", data.intent);
       setLastIntent(data.intent);
     } catch (err) {
-      console.error('Chat Error:', err);
+      console.error("Chat Error:", err);
     }
 
     setIsTyping(false);
-  }
+  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -123,16 +159,17 @@ export default function ChatWidget() {
       <button
         onClick={() => {
           if (isOpen) {
-            setIsOpen(false)
+            setIsOpen(false);
           } else {
-            setIsOpen(true)
+            setIsOpen(true);
             initialGreet();
           }
         }}
         aria-label="Open Chat"
-        className="fixed bottom-6 right-6 rounded-full bg-primary p-4 text-white shadow-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-sky-400">
+        className="fixed bottom-6 right-6 rounded-full bg-primary p-4 text-white shadow-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-sky-400"
+      >
         <MessageCircle className="h-6 w-6" />
-      </button >
+      </button>
 
       {isOpen && (
         <div
@@ -142,37 +179,88 @@ export default function ChatWidget() {
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
           <ChatMessages messages={messages} isTyping={isTyping} />
+          <p>{mode}</p>
           {mode === "entry" && (
             <EntryActions
               onSelect={(choice) => {
-                if (choice === 'question') {
-                  setMode("question_type");
-                } else {
-                  console.log('testing for now');
-                  // handleDirectionAction(choice);
+                const entryAction = entryActions.filter(
+                  (i) => i.action === choice,
+                )[0];
+
+                if (entryAction) {
+                  setMode(entryAction.action);
+
+                  if (entryAction.userMsg) {
+                    const userInput = {
+                      id: crypto.randomUUID(),
+                      role: "user",
+                      content: `${entryAction.userMsg}`,
+                      timestamp: Date.now(),
+                    };
+
+                    const botInput = {
+                      id: crypto.randomUUID(),
+                      role: "assistant",
+                      content: `${entryAction.botMsg}`,
+                      timestamp: Date.now(),
+                    };
+
+                    setMessages((m) => [...m, userInput, botInput]);
+                  }
                 }
               }}
             />
           )}
-          {mode === 'question_type' && (
-            <QuestionTypeAction
+          {(mode === "appointment" || mode === "question") && (
+            <SubActions
+              mode={mode}
               onSelect={(choice) => {
-                setContext({
-                  questionType: choice,
-                });
-                setMode('chat');
+                const subAction = entryActions
+                  .filter((ent) => ent.action === mode)[0]
+                  .subactions.filter((sub) => sub.sub === choice)[0];
+                console.log(subAction, choice);
+                if (subAction) {
+                  if (subAction.userMsg) {
+                    const userInput = {
+                      id: crypto.randomUUID(),
+                      role: "user",
+                      content: `${subAction.userMsg}`,
+                      timestamp: Date.now(),
+                    };
+
+                    setMessages((m) => [...m, userInput]);
+                  }
+
+                  if (subAction.botMsg) {
+                    const botInput = {
+                      id: crypto.randomUUID(),
+                      role: "assistant",
+                      content: `${subAction.botMsg}`,
+                      timestamp: Date.now(),
+                    };
+
+                    setMessages((m) => [...m, botInput]);
+                  }
+                  setMode("chat");
+                }
               }}
             />
           )}
           {/* <IntentActions intent={lastIntent} /> */}
+          {mode !== "chat" && mode !== "entry" && (
+            <ResetActions
+              onSelect={(choice) => {
+                setMode(choice);
+              }}
+            />
+          )}
           {mode === "chat" && (
             <ChatInput onSend={sendMessage} disabled={isTyping} />
           )}
         </div>
-      )
-      }
+      )}
     </>
-  )
+  );
 }
 
 function ChatHeader({ onClose }) {
@@ -190,7 +278,7 @@ function ChatHeader({ onClose }) {
         <X className="h-4 w-4" />
       </button>
     </div>
-  )
+  );
 }
 
 function ChatMessages({ messages, isTyping }) {
@@ -214,69 +302,42 @@ function ChatMessages({ messages, isTyping }) {
         <div ref={bottomRef} />
       </div>
     </div>
-  )
+  );
 }
 
 function MessageBubble({ message }) {
   const isUser = message.role === "user";
 
-  return (<>
-    <div
-      className={`max-w-[85%] ${isUser ? 'ml-auto text-right' : 'text-left'}`}
-    >
-      <div className="mb-1 text-xs text-gray-500">
-        {isUser ? "You" : "Support Assistant"} •{" "}
-        {formatTime(message.timestamp)}
-      </div>
-
+  return (
+    <>
       <div
-        className={`rounded-lg px-3 py-2 text-sm ${isUser
-          ? "bg-primary text-white"
-          : 'bg-gray-100 text-slate-900'
-          }`}>
-        {message.content}
-      </div>
-    </div>
+        className={`max-w-[85%] ${isUser ? "ml-auto text-right" : "text-left"}`}
+      >
+        <div className="mb-1 text-xs text-gray-500">
+          {isUser ? "You" : "Support Assistant"} •{" "}
+          {formatTime(message.timestamp)}
+        </div>
 
-  </>)
+        <div
+          className={`rounded-lg px-3 py-2 text-sm ${
+            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+          }`}
+        >
+          {message.content}
+        </div>
+      </div>
+    </>
+  );
 }
 
 function formatTime(timestamp) {
   const date = new Date(timestamp);
   return date.toLocaleTimeString([], {
     hour: "2-digit",
-    minute: '2-digit',
+    minute: "2-digit",
   });
 }
 
-function IntentActions({ intent }) {
-  if (!intent || intent == "unknown") return null
-
-  return (
-    <div className="border-t bg-slate-50 px-4 py-3">
-      {intent === 'booking' && (
-        <button
-          className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg:primary/90"
-          onClick={() =>
-            console.log('Booking flow')
-          }
-        >
-          Book A Session
-        </button>
-      )
-      }
-      {
-        intent === 'reschedule' && (
-          <button
-            className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg:primary/90"
-          >
-            Reschedule Appointment
-          </button>
-        )
-      }
-    </div >
-  )
-}
 function ChatInput({ onSend, disabled }) {
   const [value, setValue] = useState("");
 
@@ -287,92 +348,70 @@ function ChatInput({ onSend, disabled }) {
 
     onSend(value.trim());
     setValue("");
-  }
+  };
 
   return (
-    <form
-      onSubmit={submit}
-      className="border-t p-3"
-    >
+    <form onSubmit={submit} className="border-t p-3">
       <div className="flex gap-2">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Type your message..."
           disabled={disabled}
-          className='flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-sky-400'
+          className="flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-sky-400"
         />
-        <button
-          type='submit'
-          disabled={disabled}
-        >
-          <Send className='h-5 w-5 text-primary disabled:opacity-50' />
+        <button type="submit" disabled={disabled}>
+          <Send className="h-5 w-5 text-primary disabled:opacity-50" />
         </button>
       </div>
     </form>
-  )
+  );
 }
 
 function EntryActions({ onSelect }) {
   return (
     <div className="space-y-2 p-4">
-      <p className="text-sm text-gray-700">How can we help today?</p>
+      <p className="text-sm text-slate-500 text-center">
+        How can we help today?
+      </p>
 
-      <button
-        onClick={() => onSelect("schedule")}
-        className="w-full btn"
-      >
-        Schedule a session
-      </button>
-
-      <button
-        onClick={() => onSelect("reschedule")}
-        className="w-full btn"
-      >
-        Reschedule an appointment
-      </button>
-
-      <button
-        onClick={() => onSelect("question")}
-        className="w-full btn"
-      >
-        Ask a question
-      </button>
+      {entryActions.map((act) => {
+        return (
+          <button onClick={() => onSelect(act.action)} className="w-full btn">
+            {act.desc}
+          </button>
+        );
+      })}
     </div>
-  )
+  );
 }
 
-function QuestionTypeAction({ onSelect }) {
+function SubActions({ mode, onSelect }) {
+  const action = entryActions.filter((act) => act.action === mode)[0];
+
+  console.log(action);
+
   return (
     <div className="space-y-2 p-4">
-      <p className="text-sm text-gray-700">I have a question about</p>
+      <p className="text-sm text-gray-500 text-center">{action.desc}</p>
 
-      <button
-        onClick={() => onSelect("services")}
-        className="w-full btn"
-      >
-        Services
-      </button>
+      {action.subactions.map((sub) => {
+        return (
+          <button onClick={() => onSelect(sub.sub)} className="w-full btn">
+            {sub.subDesc}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-      <button
-        onClick={() => onSelect("pricing")}
-        className="w-full btn"
-      >
-        Pricing
-      </button>
-
-      <button
-        onClick={() => onSelect("contact")}
-        className="w-full btn"
-      >
-        Contact & Logistics
-      </button>
-      <button
-        onClick={() => onSelect("other")}
-        className="w-full btn"
-      >
-        Something else
+function ResetActions({ onSelect }) {
+  return (
+    <div className="absolute bottom-4 right-4 text-slate-400 hover:bg-slate-100 rounded-md p-1">
+      <button onClick={() => onSelect("entry")}>
+        <Undo2 className="w-4 h-4" />
       </button>
     </div>
-  )
+  );
 }
