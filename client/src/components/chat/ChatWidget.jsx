@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { v4 as uuid } from "uuid";
-import { MessageCircle, X, Send, Undo2 } from "lucide-react";
+import { MessageCircle, X, Send, Undo2, CircleAlert } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
+import { Tooltip } from "radix-ui";
 
 const STORAGE_KEY = "chat_widget_state";
 
@@ -17,7 +18,7 @@ const entryActions = [
         subDesc: "Schedule",
         userMsg: "I would like to schedule an appointment",
         botMsg:
-          "Absolutely -- Are you looking for an online consultation or an in-person assessment?",
+          "Absolutely -- We offer online consultations and in-person assessment. Please let me know what interests you, as well as your preferred date and time.",
       },
       {
         sub: "cancel",
@@ -38,11 +39,38 @@ const entryActions = [
   {
     action: "question",
     desc: "Ask a Question",
+    userMsg: "I want to learn more about something",
+    botMsg:
+      "Sure! I'd be happy to assist. What would you like to learn more about?",
     subactions: [
-      { sub: "services", subDesc: "Our Services" },
-      { sub: "contact", subDesc: "Our Contact Information" },
-      { sub: "pricing", subDesc: "Our Pricing / Costs" },
-      { sub: "others", subDesc: "Other information" },
+      {
+        sub: "services",
+        subDesc: "Our Services",
+        userMsg: "Tell me more about your services",
+        botMsg:
+          "We offer a wide range of services, primarily online and private calls with our professional and licensed therapists, as well as in-person assessment with standardized testing. If you have further questions, I'd be happy to clarify.",
+      },
+      {
+        sub: "contact",
+        subDesc: "Our Contact Information",
+        userMsg: "How can I contact you directly?",
+        botMsg:
+          "Sure, you may reach us via email at support@mindcare.com or phone at (+63)9 12 123 1234",
+      },
+      {
+        sub: "pricing",
+        subDesc: "Our Pricing / Costs",
+        userMsg:
+          "I would like to know more about the details on the costs involved",
+        botMsg:
+          "Absolutely, we offer free initial consultation and assessment, after that, our pricing gets tiered based on the test battery involved. To learn more about how each test battery and lab pricing, kindly see this link: mindcare.ph/tests",
+      },
+      {
+        sub: "others",
+        subDesc: "Other information",
+        userMsg: "I would like to discuss something else",
+        botMsg: "I understand, what do you have in mind?",
+      },
     ],
   },
 ];
@@ -60,6 +88,23 @@ function saveState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function formatTime(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function inputChat(role, content) {
+  return {
+    id: crypto.randomUUID(),
+    role: role,
+    content: content,
+    timestamp: Date.now(),
+  };
+}
+
 export default function ChatWidget() {
   const stored = loadState();
 
@@ -68,7 +113,6 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState(stored?.messages || []);
   const [isTyping, setIsTyping] = useState(false);
-  const [context, setContext] = useState("");
   const [lastIntent, setLastIntent] = useState(null);
 
   const [sessionId] = useState(stored?.sessionId || crypto.randomUUID());
@@ -86,15 +130,13 @@ export default function ChatWidget() {
   const initialGreet = () => {
     if (hasGreeted) return;
 
-    const greeting = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content:
+    setMessages((m) => [
+      ...m,
+      inputChat(
+        "assistant",
         "Hi there! I'm here if you have questions about our services, scheduling, or next steps. You're welcome to take your time!",
-      timestamp: Date.now(),
-    };
-
-    setMessages((m) => [...m, greeting]);
+      ),
+    ]);
     setHasGreeted(true);
   };
 
@@ -121,17 +163,9 @@ export default function ChatWidget() {
           content,
         })),
         page: window.location.pathname,
-        context: context,
       });
 
-      const botMsg = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.reply,
-        timestamp: Date.now(),
-      };
-
-      setMessages((m) => [...m, botMsg]);
+      setMessages((m) => [...m, inputChat("assistant", data.reply)]);
 
       console.log("AI Intent", data.intent);
       setLastIntent(data.intent);
@@ -166,7 +200,7 @@ export default function ChatWidget() {
           }
         }}
         aria-label="Open Chat"
-        className="fixed bottom-6 right-6 rounded-full bg-primary p-4 text-white shadow-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-sky-400"
+        className="fixed bottom-6 right-6 rounded-full bg-primary p-4 text-white shadow-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-sky-400 border-2 border-solid border-white"
       >
         <MessageCircle className="h-6 w-6" />
       </button>
@@ -179,7 +213,6 @@ export default function ChatWidget() {
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
           <ChatMessages messages={messages} isTyping={isTyping} />
-          <p>{mode}</p>
           {mode === "entry" && (
             <EntryActions
               onSelect={(choice) => {
@@ -191,21 +224,11 @@ export default function ChatWidget() {
                   setMode(entryAction.action);
 
                   if (entryAction.userMsg) {
-                    const userInput = {
-                      id: crypto.randomUUID(),
-                      role: "user",
-                      content: `${entryAction.userMsg}`,
-                      timestamp: Date.now(),
-                    };
-
-                    const botInput = {
-                      id: crypto.randomUUID(),
-                      role: "assistant",
-                      content: `${entryAction.botMsg}`,
-                      timestamp: Date.now(),
-                    };
-
-                    setMessages((m) => [...m, userInput, botInput]);
+                    setMessages((m) => [
+                      ...m,
+                      inputChat("user", entryAction.userMsg),
+                      inputChat("assistant", entryAction.botMsg),
+                    ]);
                   }
                 }
               }}
@@ -221,34 +244,20 @@ export default function ChatWidget() {
                 console.log(subAction, choice);
                 if (subAction) {
                   if (subAction.userMsg) {
-                    const userInput = {
-                      id: crypto.randomUUID(),
-                      role: "user",
-                      content: `${subAction.userMsg}`,
-                      timestamp: Date.now(),
-                    };
-
-                    setMessages((m) => [...m, userInput]);
-                  }
-
-                  if (subAction.botMsg) {
-                    const botInput = {
-                      id: crypto.randomUUID(),
-                      role: "assistant",
-                      content: `${subAction.botMsg}`,
-                      timestamp: Date.now(),
-                    };
-
-                    setMessages((m) => [...m, botInput]);
+                    setMessages((m) => [
+                      ...m,
+                      inputChat("user", subAction.userMsg),
+                      inputChat("assistant", subAction.botMsg),
+                    ]);
                   }
                   setMode("chat");
                 }
               }}
             />
           )}
-          {/* <IntentActions intent={lastIntent} /> */}
-          {mode !== "chat" && mode !== "entry" && (
+          {mode !== "entry" && (
             <ResetActions
+              mode={mode}
               onSelect={(choice) => {
                 setMode(choice);
               }}
@@ -267,16 +276,23 @@ function ChatHeader({ onClose }) {
   return (
     <div className="flex items-center justify-between border-b px-4 py-3">
       <div>
-        <p className="text-sm font-medium text-gray-900">Support Assistant</p>
+        <p className="text-sm font-medium text-gray-900 flex">
+          Support Assistant{" "}
+          <ChatTooltip content="Some of my answers are AI-generated and may be incorrect">
+            <CircleAlert className="w-4 h-4 mx-1.5 text-slate-400 hover:scale-110 hover:text-slate-600 transition-all duration-300 ease-out" />
+          </ChatTooltip>
+        </p>
         <p className="text-xs text-gray-500">Secure • Private • Optional</p>
       </div>
-      <button
-        onClick={onClose}
-        aria-label="close chat"
-        className="rounded-md p-1 text-gray-400 hover:bg-gray-100"
-      >
-        <X className="h-4 w-4" />
-      </button>
+      <ChatTooltip content="Close Chat">
+        <button
+          onClick={onClose}
+          aria-label="close chat"
+          className="rounded-md p-1 text-gray-400 hover:bg-gray-100"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </ChatTooltip>
     </div>
   );
 }
@@ -330,14 +346,6 @@ function MessageBubble({ message }) {
   );
 }
 
-function formatTime(timestamp) {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function ChatInput({ onSend, disabled }) {
   const [value, setValue] = useState("");
 
@@ -358,11 +366,13 @@ function ChatInput({ onSend, disabled }) {
           onChange={(e) => setValue(e.target.value)}
           placeholder="Type your message..."
           disabled={disabled}
-          className="flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-sky-400"
+          className="flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
         />
-        <button type="submit" disabled={disabled}>
-          <Send className="h-5 w-5 text-primary disabled:opacity-50" />
-        </button>
+        <ChatTooltip content="Send Message">
+          <button type="submit" disabled={disabled}>
+            <Send className="h-5 w-5 text-primary hover:text-accent disabled:opacity-50 hover:scale-105 duration-200" />
+          </button>
+        </ChatTooltip>
       </div>
     </form>
   );
@@ -370,14 +380,13 @@ function ChatInput({ onSend, disabled }) {
 
 function EntryActions({ onSelect }) {
   return (
-    <div className="space-y-2 p-4">
-      <p className="text-sm text-slate-500 text-center">
-        How can we help today?
-      </p>
-
+    <div className="space-y-2 p-4 flex flex-col">
       {entryActions.map((act) => {
         return (
-          <button onClick={() => onSelect(act.action)} className="w-full btn">
+          <button
+            onClick={() => onSelect(act.action)}
+            className="ml-auto text-right btn border-primary/75 border hover:bg-primary hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
+          >
             {act.desc}
           </button>
         );
@@ -389,15 +398,14 @@ function EntryActions({ onSelect }) {
 function SubActions({ mode, onSelect }) {
   const action = entryActions.filter((act) => act.action === mode)[0];
 
-  console.log(action);
-
   return (
-    <div className="space-y-2 p-4">
-      <p className="text-sm text-gray-500 text-center">{action.desc}</p>
-
+    <div className="space-y-2 px-4 flex flex-col">
       {action.subactions.map((sub) => {
         return (
-          <button onClick={() => onSelect(sub.sub)} className="w-full btn">
+          <button
+            onClick={() => onSelect(sub.sub)}
+            className="ml-auto text-right btn border-accent/75 border hover:bg-accent hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
+          >
             {sub.subDesc}
           </button>
         );
@@ -406,12 +414,41 @@ function SubActions({ mode, onSelect }) {
   );
 }
 
-function ResetActions({ onSelect }) {
+function ResetActions({ mode, onSelect }) {
   return (
-    <div className="absolute bottom-4 right-4 text-slate-400 hover:bg-slate-100 rounded-md p-1">
-      <button onClick={() => onSelect("entry")}>
-        <Undo2 className="w-4 h-4" />
-      </button>
-    </div>
+    <>
+      <div className="space-y-2 p-4 flex flex-col">
+        <ChatTooltip content="Start Over">
+          <button
+            className={`btn p-2 rounded-full hover:bg-slate-100
+            ${mode === "chat" ? "justify-center m-auto" : "ml-auto text-right"}`}
+            onClick={() => onSelect("entry")}
+          >
+            <Undo2 className="w-4 h-4 text-slate-600 text-center" />
+          </button>
+        </ChatTooltip>
+      </div>
+    </>
+  );
+}
+
+function ChatTooltip({ content, children }) {
+  return (
+    <Tooltip.Provider delayDuration={400}>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+
+        <Tooltip.Portal>
+          <Tooltip.Content
+            side="top"
+            sideOffset={8}
+            className="z-[9999] rounded-md bg-slate-500 px-2 py-1 text-xs text-white shadow-lg"
+          >
+            {content}
+            <Tooltip.Arrow className="fill-slate-500" />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
   );
 }
