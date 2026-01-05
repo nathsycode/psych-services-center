@@ -105,6 +105,22 @@ function inputChat(role, content) {
   };
 }
 
+function applyEntryAction(choice, setMessages, setMode) {
+  const entry = entryActions.find((a) => a.action === choice);
+
+  if (!entry) return;
+
+  setMode(entry.action);
+
+  if (entry.userMsg) {
+    setMessages((m) => [...m, inputChat("user", entry.userMsg)]);
+  }
+
+  if (entry.botMsg) {
+    setMessages((m) => [...m, inputChat("assistant", entry.botMsg)]);
+  }
+}
+
 export default function ChatWidget() {
   const stored = loadState();
 
@@ -190,20 +206,22 @@ export default function ChatWidget() {
 
   return (
     <>
-      <button
-        onClick={() => {
-          if (isOpen) {
-            setIsOpen(false);
-          } else {
-            setIsOpen(true);
-            initialGreet();
-          }
-        }}
-        aria-label="Open Chat"
-        className="fixed bottom-6 right-6 rounded-full bg-primary p-4 text-white shadow-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-sky-400 border-2 border-solid border-white"
-      >
-        <MessageCircle className="h-6 w-6" />
-      </button>
+      <ChatTooltip content="Chat with AI Support Assistant">
+        <button
+          onClick={() => {
+            if (isOpen) {
+              setIsOpen(false);
+            } else {
+              setIsOpen(true);
+              initialGreet();
+            }
+          }}
+          aria-label="Open Chat"
+          className="fixed bottom-6 right-6 rounded-full bg-primary p-4 text-white shadow-lg hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-sky-400 border-2 border-solid border-white"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </button>
+      </ChatTooltip>
 
       {isOpen && (
         <div
@@ -216,21 +234,7 @@ export default function ChatWidget() {
           {mode === "entry" && (
             <EntryActions
               onSelect={(choice) => {
-                const entryAction = entryActions.filter(
-                  (i) => i.action === choice,
-                )[0];
-
-                if (entryAction) {
-                  setMode(entryAction.action);
-
-                  if (entryAction.userMsg) {
-                    setMessages((m) => [
-                      ...m,
-                      inputChat("user", entryAction.userMsg),
-                      inputChat("assistant", entryAction.botMsg),
-                    ]);
-                  }
-                }
+                applyEntryAction(choice, setMessages, setMode);
               }}
             />
           )}
