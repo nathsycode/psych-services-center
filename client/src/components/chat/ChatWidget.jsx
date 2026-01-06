@@ -105,20 +105,40 @@ function inputChat(role, content) {
   };
 }
 
-function applyEntryAction(choice, setMessages, setMode) {
+function applyEntryAction(choice, { setMessages, setMode }) {
   const entry = entryActions.find((a) => a.action === choice);
 
   if (!entry) return;
 
   setMode(entry.action);
 
-  if (entry.userMsg) {
-    setMessages((m) => [...m, inputChat("user", entry.userMsg)]);
-  }
+  setMessages((m) =>
+    [
+      ...m,
+      entry.userMsg && inputChat("user", entry.userMsg),
+      entry.botMsg && inputChat("assistant", entry.botMsg),
+    ].filter(Boolean),
+  );
+}
 
-  if (entry.botMsg) {
-    setMessages((m) => [...m, inputChat("assistant", entry.botMsg)]);
-  }
+function applySubAction(mode, choice, { setMessages, setMode }) {
+  const subAction = entryActions
+    .find((a) => a.action === mode)
+    .subactions.find((sub) => sub.sub === choice);
+
+  if (!subAction) return;
+
+  console.log(subAction, choice);
+
+  setMode("chat");
+
+  setMessages((m) =>
+    [
+      ...m,
+      subAction.userMsg && inputChat("user", subAction.userMsg),
+      subAction.botMsg && inputChat("assistant", subAction.botMsg),
+    ].filter(Boolean),
+  );
 }
 
 export default function ChatWidget() {
@@ -234,7 +254,7 @@ export default function ChatWidget() {
           {mode === "entry" && (
             <EntryActions
               onSelect={(choice) => {
-                applyEntryAction(choice, setMessages, setMode);
+                applyEntryAction(choice, { setMessages, setMode });
               }}
             />
           )}
@@ -242,20 +262,19 @@ export default function ChatWidget() {
             <SubActions
               mode={mode}
               onSelect={(choice) => {
-                const subAction = entryActions
-                  .filter((ent) => ent.action === mode)[0]
-                  .subactions.filter((sub) => sub.sub === choice)[0];
-                console.log(subAction, choice);
-                if (subAction) {
-                  if (subAction.userMsg) {
-                    setMessages((m) => [
-                      ...m,
-                      inputChat("user", subAction.userMsg),
-                      inputChat("assistant", subAction.botMsg),
-                    ]);
-                  }
-                  setMode("chat");
-                }
+                applySubAction(mode, choice, { setMessages, setMode });
+                // .filter((ent) => ent.action === mode)[0]
+                // .subactions.filter((sub) => sub.sub === choice)[0];
+                // if (subAction) {
+                //   if (subAction.userMsg) {
+                //     setMessages((m) => [
+                //       ...m,
+                //       inputChat("user", subAction.userMsg),
+                //       inputChat("assistant", subAction.botMsg),
+                //     ]);
+                //   }
+                //   setMode("chat");
+                // }
               }}
             />
           )}
