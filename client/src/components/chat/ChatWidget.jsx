@@ -122,15 +122,16 @@ function applyEntryAction(choice, { setMessages, setMode }) {
 }
 
 function applySubAction(mode, choice, { setMessages, setMode }) {
-  const subAction = entryActions
-    .find((a) => a.action === mode)
-    .subactions.find((sub) => sub.sub === choice);
+  const entry = entryActions.find((a) => a.action === mode);
+
+  if (!entry) return;
+
+  const subAction = entry.subactions.find((sub) => sub.sub === choice);
 
   if (!subAction) return;
 
   console.log(subAction, choice);
 
-  setMode("chat");
 
   setMessages((m) =>
     [
@@ -139,6 +140,12 @@ function applySubAction(mode, choice, { setMessages, setMode }) {
       subAction.botMsg && inputChat("assistant", subAction.botMsg),
     ].filter(Boolean),
   );
+
+  if (choice !== 'schedule') {
+    setMode("chat");
+  } else {
+    setMode(choice);
+  }
 }
 
 export default function ChatWidget() {
@@ -150,6 +157,7 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState(stored?.messages || []);
   const [isTyping, setIsTyping] = useState(false);
   const [lastIntent, setLastIntent] = useState(null);
+  const [flowData, setFlowData] = useState({});
 
   const [sessionId] = useState(stored?.sessionId || crypto.randomUUID());
 
@@ -178,23 +186,25 @@ export default function ChatWidget() {
 
   const sendMessage = async (content) => {
     if (isTyping) return;
-    setLastIntent(null);
-    const userMsg = {
-      id: uuid(),
-      role: "user",
-      content,
-      timestamp: Date.now(),
-    };
 
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
+    setLastIntent(null);
     setIsTyping(true);
+
+    const userMsg = inputChat("user", content);
+
+    let nextMessages;
+
+    setMessages((m) => {
+      nextMessages = [...m, userMsg];
+      return nextMessages
+    });
+
 
     try {
       const data = await sendChatMessage({
         sessionId,
         message: content,
-        messages: updatedMessages.map(({ role, content }) => ({
+        messages: nextMessages.map(({ role, content }) => ({
           role,
           content,
         })),
@@ -207,9 +217,10 @@ export default function ChatWidget() {
       setLastIntent(data.intent);
     } catch (err) {
       console.error("Chat Error:", err);
+    } finally {
+      setIsTyping(false);
     }
 
-    setIsTyping(false);
   };
 
   useEffect(() => {
@@ -246,7 +257,7 @@ export default function ChatWidget() {
       {isOpen && (
         <div
           role="dialog"
-          aria-model="true"
+          aria-modal="true"
           className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[360px] flex-col rounded-xl bg-white shadow-2xl"
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
@@ -263,21 +274,28 @@ export default function ChatWidget() {
               mode={mode}
               onSelect={(choice) => {
                 applySubAction(mode, choice, { setMessages, setMode });
-                // .filter((ent) => ent.action === mode)[0]
-                // .subactions.filter((sub) => sub.sub === choice)[0];
-                // if (subAction) {
-                //   if (subAction.userMsg) {
-                //     setMessages((m) => [
-                //       ...m,
-                //       inputChat("user", subAction.userMsg),
-                //       inputChat("assistant", subAction.botMsg),
-                //     ]);
-                //   }
-                //   setMode("chat");
-                // }
               }}
             />
           )}
+          {mode === 'schedule' && !flowData.service && (
+            <ServicePicker onSelect={(service) => setFlowData((f) => ({ ...f, service }))}
+            />
+          )}
+
+          {mode === 'schedule' && flowData.service && !flowData.selectedSlot && (
+            <AvailabilityPicker
+              flowData={flowData}
+              onSelectSlot={(slot) => setFlowData((f) => ({ ...f, selectedSlot: slot }))}
+            />
+          )}
+
+          {flowData.selectedSlot && !flowData.bookingId && (
+            <ConfirmBooking
+              slot={flowData.selectedSlot}
+              onConfirm={"confirmed"}
+            />
+          )}
+
           {mode !== "entry" && (
             <ResetActions
               mode={mode}
@@ -358,9 +376,8 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${
-            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-          }`}
+          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+            }`}
         >
           {message.content}
         </div>
@@ -407,6 +424,7 @@ function EntryActions({ onSelect }) {
       {entryActions.map((act) => {
         return (
           <button
+            key={act.action}
             onClick={() => onSelect(act.action)}
             className="ml-auto text-right btn border-primary/75 border hover:bg-primary hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
           >
@@ -426,6 +444,7 @@ function SubActions({ mode, onSelect }) {
       {action.subactions.map((sub) => {
         return (
           <button
+            key={sub.sub}
             onClick={() => onSelect(sub.sub)}
             className="ml-auto text-right btn border-accent/75 border hover:bg-accent hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
           >
@@ -435,9 +454,7 @@ function SubActions({ mode, onSelect }) {
       })}
     </div>
   );
-}
-
-function ResetActions({ mode, onSelect }) {
+} function ResetActions({ mode, onSelect }) {
   return (
     <>
       <div className="space-y-2 p-4 flex flex-col">
@@ -474,4 +491,62 @@ function ChatTooltip({ content, children }) {
       </Tooltip.Root>
     </Tooltip.Provider>
   );
+}
+
+function ServicePicker({ onSelect }) {
+  return (
+    <div className="space-y-2 p-4">
+      <button
+        onClick={() => onSelect("consultation")}
+        className='btn w-full'
+      >
+        Online Consultation
+      </button>
+      <button
+        onClick={() => onSelect("assessment")}
+        className='btn w-full'
+      >
+        In-Person Assessment
+      </button>
+    </div>
+  )
+}
+
+const VITE_CALENDAR_AVAILABILITY_URL = "http://localhost:5678/webhook-test/calendar/availability"
+
+const getAvailability = async (service) => {
+  const res = await fetch(VITE_CALENDAR_AVAILABILITY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      service: service,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+  })
+
+  const data = await res.json();
+
+  return data.slots
+}
+
+function AvailabilityPicker({ flowData, onSelectSlot }) {
+  console.log(flowData, onSelectSlot);
+
+  console.log(getAvailability(flowData.service))
+
+  return (
+    <div>
+      Availability Picker
+    </div>
+  )
+}
+
+function ConfirmBooking({ slot, onConfirm }) {
+  console.log(slot, onConfirm);
+
+  return (
+    <div>
+      Confirm Booking
+    </div>
+  )
 }
