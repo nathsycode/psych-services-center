@@ -10,6 +10,7 @@ const STORAGE_KEY = "chat_widget_state";
 //   "http://localhost:5678/webhook-test/calendar/availability";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
+const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
 
 const entryActions = [
   {
@@ -160,7 +161,6 @@ export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState(stored?.messages || []);
   const [isTyping, setIsTyping] = useState(false);
-  const [lastIntent, setLastIntent] = useState(null);
   const [flowData, setFlowData] = useState({});
 
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -180,6 +180,8 @@ export default function ChatWidget() {
       sessionId,
       messages,
       hasGreeted,
+      mode,
+      flowData,
     });
   }, [sessionId, messages, hasGreeted]);
 
@@ -218,7 +220,6 @@ export default function ChatWidget() {
   const sendMessage = async (content) => {
     if (isTyping) return;
 
-    setLastIntent(null);
     setIsTyping(true);
 
     const userMsg = inputChat("user", content);
@@ -244,7 +245,6 @@ export default function ChatWidget() {
       setMessages((m) => [...m, inputChat("assistant", data.reply)]);
 
       console.log("AI Intent", data.intent);
-      setLastIntent(data.intent);
     } catch (err) {
       console.error("Chat Error:", err);
     } finally {
@@ -264,8 +264,25 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
+  const USE_MOCK_BOOKING = true; //TODO: REMOVE
+
   const confirmBooking = async () => {
     setBookingLoading(true);
+
+    if (USE_MOCK_BOOKING) {
+      await new Promise((r) => setTimeout(r, 800));
+
+      setMessages((m) => [
+        ...m,
+        inputChat("assistant", "(MOCK) Your appointment has been booked."),
+      ]);
+
+      setSelectedSlot(null);
+      setFlowData({});
+      setMode("chat");
+      setBookingLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch(VITE_BOOKING_URL, {
@@ -293,6 +310,7 @@ export default function ChatWidget() {
 
       setMode("chat");
       setSelectedSlot(null);
+      setFlowData({});
     } catch (err) {
       setMessages((m) => [
         ...m,
@@ -331,90 +349,77 @@ export default function ChatWidget() {
           aria-modal="true"
           className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[360px] flex-col rounded-xl bg-white shadow-2xl"
         >
-          {/* Header stays outside dimming */}
           <ChatHeader onClose={() => setIsOpen(false)} />
+          <ChatMessages messages={messages} isTyping={isTyping} />
+          {mode === "entry" && (
+            <EntryActions
+              onSelect={(choice) => {
+                applyEntryAction(choice, { setMessages, setMode });
+              }}
+            />
+          )}
+          {(mode === "appointment" || mode === "question") && (
+            <SubActions
+              mode={mode}
+              onSelect={(choice) => {
+                applySubAction(mode, choice, { setMessages, setMode });
+              }}
+            />
+          )}
 
-          {/* Everything below can be dimmed */}
-          <div className="relative flex-1 overflow-hidden">
-            {/* BACKGROUND LAYER (gets dimmed & locked) */}
-            <div
-              className={`h-full transition-opacity ${
-                isConfirming ? "opacity-40 pointer-events-none" : ""
-              }`}
-            >
-              <ChatMessages messages={messages} isTyping={isTyping} />
+          {mode === "schedule" && !flowData.service && (
+            <ServicePicker
+              onSelect={(service) => setFlowData((f) => ({ ...f, service }))}
+            />
+          )}
 
-              {mode === "entry" && (
-                <EntryActions
-                  onSelect={(choice) => {
-                    applyEntryAction(choice, { setMessages, setMode });
-                  }}
-                />
-              )}
+          {mode === "schedule" && flowData.service && !selectedSlot && (
+            <AvailabilityPicker
+              availability={availability}
+              onSelectSlot={setSelectedSlot}
+            />
+          )}
 
-              {(mode === "appointment" || mode === "question") && (
-                <SubActions
-                  mode={mode}
-                  onSelect={(choice) => {
-                    applySubAction(mode, choice, { setMessages, setMode });
-                  }}
-                />
-              )}
-
-              {mode === "schedule" && !flowData.service && (
-                <ServicePicker
-                  onSelect={(service) =>
-                    setFlowData((f) => ({ ...f, service }))
-                  }
-                />
-              )}
-
-              {mode === "schedule" && flowData.service && !selectedSlot && (
-                <AvailabilityPicker
-                  availability={availability}
-                  onSelectSlot={setSelectedSlot}
-                />
-              )}
-
-              {mode !== "entry" && !isConfirming && (
-                <ResetActions
-                  mode={mode}
-                  onSelect={(choice) => {
-                    setMode(choice);
-                    setSelectedSlot(null);
-                  }}
-                />
-              )}
-
-              {mode === "chat" && (
-                <ChatInput
-                  onSend={sendMessage}
-                  disabled={isTyping || isConfirming}
-                />
-              )}
+          {availabilityError && (
+            <div className="px-4 py-2 text-sm text-red-500">
+              {availabilityError}
             </div>
+          )}
 
-            {/* CONFIRMATION OVERLAY */}
-            {isConfirming && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm overflow-y-auto p-4">
-                <ConfirmBooking
-                  slot={{
-                    ...selectedSlot,
-                    weekday: new Date(selectedSlot.date).toLocaleDateString(
-                      "en-US",
-                      {
-                        weekday: "long",
-                      },
-                    ),
-                  }}
-                  service={flowData.service}
-                  loading={bookingLoading}
-                  onConfirm={confirmBooking}
-                  onBack={() => setSelectedSlot(null)}
-                />
-              </div>
-            )}
-          </div>
+          {mode !== "entry" && !isConfirming && (
+            <ResetActions
+              mode={mode}
+              onSelect={(choice) => {
+                setMode(choice);
+                setSelectedSlot(null);
+              }}
+            />
+          )}
+
+          {isConfirming && (
+            <ConfirmBooking
+              slot={{
+                ...selectedSlot,
+                weekday: new Date(selectedSlot.date).toLocaleDateString(
+                  "en-US",
+                  {
+                    weekday: "long",
+                  },
+                ),
+              }}
+              service={flowData.service}
+              loading={bookingLoading}
+              onConfirm={confirmBooking}
+              onBack={() => setSelectedSlot(null)}
+            />
+          )}
+
+          {mode === "chat" && (
+            <ChatInput
+              onSend={sendMessage}
+              disabled={isTyping || isConfirming}
+            />
+          )}
         </div>
       )}
     </>
@@ -645,14 +650,14 @@ function AvailabilityPicker({ availability, onSelectSlot }) {
 
   return (
     <div className="space-y-4 p-4">
-      {availability.map((day) => (
+      {availability.slice(0, 3).map((day) => (
         <div key={day.date}>
           <div className="mb-2 text-sm font-medium text-slate-700">
             {day.weekday} · {day.date}
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {day.slots.map((time) => (
+            {day.slots.slice(0, 4).map((time) => (
               <button
                 key={time}
                 onClick={() => onSelectSlot({ date: day.date, time })}
