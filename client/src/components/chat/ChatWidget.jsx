@@ -81,6 +81,8 @@ const entryActions = [
   },
 ];
 
+// Helpers
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -151,6 +153,22 @@ function applySubAction(mode, choice, { setMessages, setMode }) {
   } else {
     setMode(choice);
   }
+}
+
+function groupByYearMonth(days) {
+  const grouped = {};
+
+  days.forEach((day) => {
+    const date = new Date(day.date);
+    const year = date.getFullYear();
+    const month = date.toLocaleDateString("en-US", { month: "long" });
+
+    grouped[year] ??= {};
+    grouped[year][month] ??= [];
+    grouped[year][month].push(day);
+  });
+
+  return grouped;
 }
 
 export default function ChatWidget() {
@@ -642,33 +660,107 @@ const getAvailability = async (service) => {
 };
 
 function AvailabilityPicker({ availability, onSelectSlot }) {
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTime, setSelectedTime] = useState(null);
+
   if (!availability || availability.length === 0) {
     return (
       <div className="p-4 text-sm text-slate-500">No available times found</div>
     );
   }
 
+  const MAX_DATES = 10;
+  const earliestDay = availability.find((d) => d.slots.length > 0);
+  const availableDays = availability.filter(
+    (day) => day.slots && day.slots.length > 0,
+  );
+  const limitedDays = availableDays.slice(0, MAX_DATES);
+
+  if (selectedDate && selectedTime) {
+    return (
+      <>
+        <p>Details Form</p>
+      </>
+    );
+  }
+
+  if (selectedDate) {
+    const day = availability.find((d) => d.date === selectedDate);
+
+    return (
+      <>
+        <p>Time Picker</p>
+      </>
+    );
+  }
+
+  return (
+    <DatePicker
+      availability={availability}
+      onSelectDate={setSelectedDate}
+      onSelectEarliest={() => setSelectedDate(earliestDay.date)}
+    />
+  );
+}
+
+function DatePicker({ availability, onSelectDate, onSelectEarliest }) {
+  const PAGE_SIZE = 10;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const visibleDays = availability
+    .filter((d) => d.slots.length > 0)
+    .slice(0, visibleCount);
+
+  const grouped = groupByYearMonth(visibleDays);
+
   return (
     <div className="space-y-4 p-4">
-      {availability.slice(0, 3).map((day) => (
-        <div key={day.date}>
-          <div className="mb-2 text-sm font-medium text-slate-700">
-            {day.weekday} · {day.date}
-          </div>
+      <button
+        onClick={onSelectEarliest}
+        className="w-full rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
+      >
+        Book Earliest Available
+      </button>
 
-          <div className="flex flex-wrap gap-2">
-            {day.slots.slice(0, 4).map((time) => (
-              <button
-                key={time}
-                onClick={() => onSelectSlot({ date: day.date, time })}
-                className="rounded-md border px-3 py-1 text-sm hover:bg-slate-100"
-              >
-                {time}
-              </button>
+      <div className="space-y-4">
+        {Object.entries(grouped).map(([year, months]) => (
+          <div key={year}>
+            <div className="text-xs font-semibold text-slate-500">{year}</div>
+
+            {Object.entries(months).map(([month, days]) => (
+              <div key={month} className="space-y-1">
+                <div className="text-xs text-slate-400">{month}</div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  {days.map((day) => {
+                    const dateObj = new Date(day.date);
+                    const dayNum = dateObj.getDate();
+                    const weekday = dateObj.toLocaleString("en-US", {
+                      weekday: "short",
+                    });
+                    const dayShown = dayNum.toString().padStart(2, "0");
+
+                    return (
+                      <button
+                        key={day.date}
+                        onClick={() => onSelectDate(day.date)}
+                        className="flex h-14 flex-col items-center justify-center rounded-md border text-xs hover:bg-primary/5"
+                      >
+                        <span className="font-semibold">{dayShown}</span>
+                        <span className="text-slate-500">{weekday}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      {visibleCount < availability.length && (
+        <button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+          Show more dates
+        </button>
+      )}
     </div>
   );
 }
