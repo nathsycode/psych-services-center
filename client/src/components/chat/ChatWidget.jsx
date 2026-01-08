@@ -368,7 +368,16 @@ export default function ChatWidget() {
           className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[360px] flex-col rounded-xl bg-white shadow-2xl"
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
+
           <ChatMessages messages={messages} isTyping={isTyping} />
+
+          {mode === "schedule" && flowData.service && !selectedSlot && (
+            <AvailabilityPicker
+              availability={availability}
+              onSelectSlot={setSelectedSlot}
+            />
+          )}
+
           {mode === "entry" && (
             <EntryActions
               onSelect={(choice) => {
@@ -391,20 +400,13 @@ export default function ChatWidget() {
             />
           )}
 
-          {mode === "schedule" && flowData.service && !selectedSlot && (
-            <AvailabilityPicker
-              availability={availability}
-              onSelectSlot={setSelectedSlot}
-            />
-          )}
-
           {availabilityError && (
             <div className="px-4 py-2 text-sm text-red-500">
               {availabilityError}
             </div>
           )}
 
-          {mode !== "entry" && !isConfirming && (
+          {mode !== "entry" && mode !== "schedule" && !isConfirming && (
             <ResetActions
               mode={mode}
               onSelect={(choice) => {
@@ -703,64 +705,102 @@ function AvailabilityPicker({ availability, onSelectSlot }) {
   );
 }
 
-function DatePicker({ availability, onSelectDate, onSelectEarliest }) {
+function DatePicker({
+  availability,
+  onSelectDate,
+  onSelectEarliest,
+  onSelectBack,
+}) {
   const PAGE_SIZE = 10;
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const visibleDays = availability
-    .filter((d) => d.slots.length > 0)
-    .slice(0, visibleCount);
+  const [page, setPage] = useState(0);
 
-  const grouped = groupByYearMonth(visibleDays);
+  const availableDays = availability.filter((d) => d.slots.length > 0);
+
+  const start = page * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+
+  const pagedDays = availableDays.slice(start, end);
+  const grouped = groupByYearMonth(pagedDays);
 
   return (
-    <div className="space-y-4 p-4">
+    <div id="main" className="space-y-4 px-4 h-full">
       <button
         onClick={onSelectEarliest}
-        className="w-full rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
+        className="w-full shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
       >
         Book Earliest Available
       </button>
 
-      <div className="space-y-4">
-        {Object.entries(grouped).map(([year, months]) => (
-          <div key={year}>
-            <div className="text-xs font-semibold text-slate-500">{year}</div>
+      <div id="picker" className="space-y-4 flex flex-col min-h-0 flex-1">
+        <div className="flex-1 overflow-y-auto space-y-4">
+          {Object.entries(grouped).map(([year, months]) => (
+            <div className="" key={year}>
+              <div className="text-xs font-semibold">{year}</div>
 
-            {Object.entries(months).map(([month, days]) => (
-              <div key={month} className="space-y-1">
-                <div className="text-xs text-slate-400">{month}</div>
+              {Object.entries(months).map(([month, days]) => (
+                <div key={month} className="space-y-1 mb-2">
+                  <div className="text-xs">{month}</div>
 
-                <div className="grid grid-cols-4 gap-2">
-                  {days.map((day) => {
-                    const dateObj = new Date(day.date);
-                    const dayNum = dateObj.getDate();
-                    const weekday = dateObj.toLocaleString("en-US", {
-                      weekday: "short",
-                    });
-                    const dayShown = dayNum.toString().padStart(2, "0");
+                  <div className="grid grid-cols-5 gap-2">
+                    {days.map((day) => {
+                      const dateObj = new Date(day.date);
+                      const dayNum = dateObj.getDate();
+                      const weekday = dateObj.toLocaleString("en-US", {
+                        weekday: "short",
+                      });
+                      const dayShown = dayNum.toString().padStart(2, "0");
 
-                    return (
-                      <button
-                        key={day.date}
-                        onClick={() => onSelectDate(day.date)}
-                        className="flex h-14 flex-col items-center justify-center rounded-md border text-xs hover:bg-primary/5"
-                      >
-                        <span className="font-semibold">{dayShown}</span>
-                        <span className="text-slate-500">{weekday}</span>
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          key={day.date}
+                          onClick={() => onSelectDate(day.date)}
+                          className="flex h-14 flex-col items-center justify-center rounded-md border text-xs hover:bg-primary/5"
+                        >
+                          <span className="text-sm font-semibold">
+                            {dayShown}
+                          </span>
+                          <span className="text-slate-500">{weekday}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
+              ))}
+            </div>
+          ))}
+        </div>
+        <div
+          id="nav"
+          className="shrink-0 flex items-center justify-between pt-2"
+        >
+          {page === 0 && (
+            <button
+              onClick={() => onSelectBack()}
+              className="rounded-md border px-3 py-1 text-xs hover:bg-primary/5"
+            >
+              Go Back
+            </button>
+          )}
+          <button
+            disabled={page === 0}
+            onClick={() => setPage((p) => p - 1)}
+            className="rounded-md border px-3 py-1 text-xs disabled:opacity-40 hover:bg-primary/5"
+          >
+            Previous
+          </button>
+          <span className="text-xs text-slate-500">
+            {start + 1}-{Math.min(end, availableDays.length)} of{" "}
+            {availableDays.length}
+          </span>
+          <button
+            disabled={end >= availableDays.length}
+            onClick={() => setPage((p) => p + 1)}
+            className="rounded-md border px-3 py-1 text-xs disabled:opacity-40 hover:bg-primary/5"
+          >
+            Next
+          </button>
+        </div>
       </div>
-      {visibleCount < availability.length && (
-        <button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
-          Show more dates
-        </button>
-      )}
     </div>
   );
 }
