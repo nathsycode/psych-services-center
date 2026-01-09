@@ -182,7 +182,6 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState(stored?.messages || []);
   const [isTyping, setIsTyping] = useState(false);
   const [flowData, setFlowData] = useState({});
-  const [showDebug, setShowDebug] = useState(false); //TODO: REMOVE ON PROD
 
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [availability, setAvailability] = useState(null);
@@ -285,24 +284,6 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "x") {
-        setShowDebug((prev) => !prev);
-      }
-    };
-
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
   const USE_MOCK_BOOKING = true; //TODO: REMOVE
 
   const confirmBooking = async () => {
@@ -390,28 +371,13 @@ export default function ChatWidget() {
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
 
-          {showDebug && (
-            <p className="absolute text-center items-center justify-center w-full bg-primary">
-              {mode}
-            </p>
-          )}
+          <ChatMessages messages={messages} isTyping={isTyping} />
 
-          {/* {mode !== "schedule" && flowData.service && ( */}
-          {/* )} */}
-
-          {mode === "schedule" && flowData.service && !selectedSlot ? (
+          {mode === "schedule" && flowData.service && !selectedSlot && (
             <AvailabilityPicker
               availability={availability}
               onSelectSlot={setSelectedSlot}
-              onSelectBack={() =>
-                setFlowData((f) => ({
-                  ...f,
-                  service: null,
-                }))
-              }
             />
-          ) : (
-            <ChatMessages messages={messages} isTyping={isTyping} />
           )}
 
           {mode === "entry" && (
@@ -442,7 +408,7 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {mode !== "entry" && !flowData.service && !isConfirming && (
+          {mode !== "entry" && mode !== "schedule" && !isConfirming && (
             <ResetActions
               mode={mode}
               onSelect={(choice) => {
@@ -667,17 +633,11 @@ function ChatTooltip({ content, children }) {
 
 function ServicePicker({ onSelect }) {
   return (
-    <div className="space-y-2 p-4 flex flex-col">
-      <button
-        onClick={() => onSelect("consultation")}
-        className="ml-auto text-right btn border-accent/75 border hover:bg-accent hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
-      >
+    <div className="space-y-2 p-4">
+      <button onClick={() => onSelect("consultation")} className="btn w-full">
         Online Consultation
       </button>
-      <button
-        onClick={() => onSelect("assessment")}
-        className="ml-auto text-right btn border-accent/75 border hover:bg-accent hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
-      >
+      <button onClick={() => onSelect("assessment")} className="btn w-full">
         In-Person Assessment
       </button>
     </div>
@@ -703,7 +663,7 @@ const getAvailability = async (service) => {
   return data.availability;
 };
 
-function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
+function AvailabilityPicker({ availability, onSelectSlot }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
 
@@ -732,26 +692,9 @@ function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
     const day = availability.find((d) => d.date === selectedDate);
 
     return (
-      <div className="h-full min-h-0 flex flex-col p-4">
-        <div className="text-xs font-semibold">{day.date}</div>
-        <div className="text-xs">{day.weekday}</div>
-
-        <div className="grid grid-cols-5 gap-2 p-4 flex-1">
-          {day.slots.map((time) => (
-            <button
-              key={time}
-              className="text-sm rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1"
-            >
-              {time}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={onSelectBack}>Go Back To Services</button>
-        <button onClick={() => setSelectedDate(null)}>
-          Choose A Different Date
-        </button>
-      </div>
+      <>
+        <p>Time Picker</p>
+      </>
     );
   }
 
@@ -760,7 +703,6 @@ function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
       availability={availability}
       onSelectDate={setSelectedDate}
       onSelectEarliest={() => setSelectedDate(earliestDay.date)}
-      onSelectBack={onSelectBack}
     />
   );
 }
@@ -783,18 +725,15 @@ function DatePicker({
   const grouped = groupByYearMonth(pagedDays);
 
   return (
-    <div
-      id="main"
-      className="w-full flex flex-col flex-1 space-y-4 px-4 h-full"
-    >
+    <div id="main" className="space-y-4 px-4 h-full">
       <button
         onClick={onSelectEarliest}
-        className="mt-6 w-full shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
+        className="w-full shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
       >
         Book Earliest Available
       </button>
 
-      <div id="picker" className="space-y-4 flex flex-col flex-1 min-h-0 pb-6">
+      <div id="picker" className="space-y-4 flex flex-col min-h-0 flex-1">
         <div className="flex-1 overflow-y-auto space-y-4">
           {Object.entries(grouped).map(([year, months]) => (
             <div className="" key={year}>
@@ -834,24 +773,23 @@ function DatePicker({
         </div>
         <div
           id="nav"
-          className="shrink-0 flex items-center justify-between pt-2 bg-white/50"
+          className="shrink-0 flex items-center justify-between pt-2"
         >
-          {page === 0 ? (
+          {page === 0 && (
             <button
               onClick={() => onSelectBack()}
               className="rounded-md border px-3 py-1 text-xs hover:bg-primary/5"
             >
               Go Back
             </button>
-          ) : (
-            <button
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded-md border px-3 py-1 text-xs disabled:opacity-40 hover:bg-primary/5"
-            >
-              Previous
-            </button>
           )}
+          <button
+            disabled={page === 0}
+            onClick={() => setPage((p) => p - 1)}
+            className="rounded-md border px-3 py-1 text-xs disabled:opacity-40 hover:bg-primary/5"
+          >
+            Previous
+          </button>
           <span className="text-xs text-slate-500">
             {start + 1}-{Math.min(end, availableDays.length)} of{" "}
             {availableDays.length}
