@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { v4 as uuid } from "uuid";
-import { MessageCircle, X, Send, Undo2, CircleAlert } from "lucide-react";
+import {
+  MessageCircle,
+  X,
+  Send,
+  Undo2,
+  CircleAlert,
+  CalendarSearch,
+} from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import ConfirmBooking from "./ConfirmBooking";
 import { Tooltip } from "radix-ui";
@@ -724,6 +731,7 @@ function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
     return (
       <>
         <p>Details Form</p>
+        <div>{selectedTime}</div>
       </>
     );
   }
@@ -736,21 +744,42 @@ function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
         <div className="text-xs font-semibold">{day.date}</div>
         <div className="text-xs">{day.weekday}</div>
 
-        <div className="grid grid-cols-5 gap-2 p-4 flex-1">
-          {day.slots.map((time) => (
-            <button
-              key={time}
-              className="text-sm rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1"
-            >
-              {time}
-            </button>
-          ))}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="grid grid-cols-4 gap-2 p-2 content-start">
+            {/*TODO: Separate AM vs PM */}
+            {day.slots.map((time) => (
+              <button
+                key={time}
+                className="text-xs rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center"
+                onClick={() => setSelectedTime(time)}
+              >
+                <span className="text-sm font-semibold">
+                  {time.slice(0, 5)}
+                </span>
+                <span className="text-slate-600">{time.slice(6, 8)}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <button onClick={onSelectBack}>Go Back To Services</button>
-        <button onClick={() => setSelectedDate(null)}>
-          Choose A Different Date
-        </button>
+        <div className="shrink-0 flex flex-row justify-center gap-4">
+          <ChatTooltip content="Go Back to Services">
+            <button
+              className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
+              onClick={onSelectBack}
+            >
+              <Undo2 className="h-5 w-5 text-slate-600" />
+            </button>
+          </ChatTooltip>
+          <ChatTooltip content="Search for Another Date">
+            <button
+              className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
+              onClick={() => setSelectedDate(null)}
+            >
+              <CalendarSearch className="h-5 w-5 text-slate-600" />
+            </button>
+          </ChatTooltip>
+        </div>
       </div>
     );
   }
