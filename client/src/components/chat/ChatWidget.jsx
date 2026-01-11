@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import ConfirmBooking from "./ConfirmBooking";
-import { Tooltip } from "radix-ui";
+import { Tooltip, Form } from "radix-ui";
 
 const STORAGE_KEY = "chat_widget_state";
 // const VITE_CALENDAR_AVAILABILITY_URL =
@@ -173,6 +173,19 @@ function groupByYearMonth(days) {
     grouped[year] ??= {};
     grouped[year][month] ??= [];
     grouped[year][month].push(day);
+  });
+
+  return grouped;
+}
+
+function groupByAbbreviation(slots) {
+  const grouped = {};
+
+  slots.forEach((slot) => {
+    const abb = slot.slice(6, 8);
+
+    grouped[abb] ??= [];
+    grouped[abb].push(slot);
   });
 
   return grouped;
@@ -672,6 +685,70 @@ function ChatTooltip({ content, children }) {
   );
 }
 
+function DetailsForm({ selectedDate, selectedTime }) {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center">
+      <p>
+        {selectedDate} at {selectedTime}
+      </p>
+      <div className="px-4 py-2 min-h-0 overflow-y-auto border border-t-slate-400">
+        <Form.Root className="w-[260px]">
+          <Form.Field className="mb-2.5 grid" name="name">
+            <div className="flex items-baseline justify-between">
+              <Form.Label className="text-[15px] font-medium leading-[35px] text-slate-900">
+                Full Name*
+              </Form.Label>
+              <Form.Message
+                className="text-[13px] text-red-500 opacity-80"
+                match="valueMissing"
+              >
+                Please enter your full name
+              </Form.Message>
+            </div>
+            <Form.Control asChild>
+              <input
+                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded border border-slate-400 px-2.5 text-[15px] leading-none text-slate-900 focus:text-red"
+                required
+              />
+            </Form.Control>
+          </Form.Field>
+          <Form.Field className="mb-2.5 grid" name="email">
+            <div className="flex items-baseline justify-between">
+              <Form.Label className="text-[15px] font-medium leading-[35px] text-black">
+                Email*
+              </Form.Label>
+              <Form.Message
+                className="text-[13px] text-white opacity-80"
+                match="valueMissing"
+              >
+                Please enter your email
+              </Form.Message>
+              <Form.Message
+                className="text-[13px] text-white opacity-80"
+                match="typeMismatch"
+              >
+                Please provide a valid email
+              </Form.Message>
+            </div>
+            <Form.Control asChild>
+              <input
+                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded bg-blackA2 px-2.5 text-[15px] leading-none text-black shadow-[0_0_0_1px] shadow-blackA6 outline-none selection:border-primary selection:text-white hover:shadow-[0_0_0_1px_black] focus:border-primary"
+                type="email"
+                required
+              />
+            </Form.Control>
+          </Form.Field>
+          <Form.Submit asChild>
+            <button className="mt-2.5 box-border inline-flex h-[35px] w-full items-center justify-center rounded bg-white px-[15px] font-medium leading-none text-violet11 shadow-[0_2px_10px] shadow-blackA4 hover:bg-mauve3 focus:shadow-[0_0_0_2px] focus:shadow-black focus:outline-none">
+              Post question
+            </button>
+          </Form.Submit>
+        </Form.Root>
+      </div>
+    </div>
+  );
+}
+
 function ServicePicker({ onSelect }) {
   return (
     <div className="space-y-2 p-4 flex flex-col">
@@ -732,34 +809,39 @@ function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
       <>
         <p>Details Form</p>
         <div>{selectedTime}</div>
+        <DetailsForm selectedDate={selectedDate} selectedTime={selectedTime} />
       </>
     );
   }
 
   if (selectedDate) {
     const day = availability.find((d) => d.date === selectedDate);
+    const grouped = groupByAbbreviation(day.slots);
 
     return (
       <div className="h-full min-h-0 flex flex-col p-4">
         <div className="text-xs font-semibold">{day.date}</div>
         <div className="text-xs">{day.weekday}</div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="grid grid-cols-4 gap-2 p-2 content-start">
-            {/*TODO: Separate AM vs PM */}
-            {day.slots.map((time) => (
-              <button
-                key={time}
-                className="text-xs rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center"
-                onClick={() => setSelectedTime(time)}
-              >
-                <span className="text-sm font-semibold">
-                  {time.slice(0, 5)}
-                </span>
-                <span className="text-slate-600">{time.slice(6, 8)}</span>
-              </button>
-            ))}
-          </div>
+        <div className="flex-1 min-h-0 overflow-y-auto py-2">
+          {Object.entries(grouped).map(([abb, slots]) => {
+            return (
+              <div className="flex flex-col">
+                <p className="font-semibold text-sm">{abb}</p>
+                <div className="grid grid-cols-4 gap-2 p-2 content-start">
+                  {slots.map((slot) => (
+                    <button
+                      key={slot.slice(0, 5)}
+                      className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
+                      onClick={() => setSelectedTime(slot)}
+                    >
+                      {slot.slice(0, 5)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="shrink-0 flex flex-row justify-center gap-4">
