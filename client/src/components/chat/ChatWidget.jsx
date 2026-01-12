@@ -7,6 +7,9 @@ import {
   Undo2,
   CircleAlert,
   CalendarSearch,
+  Calendar,
+  Clock,
+  ArrowLeft,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import ConfirmBooking from "./ConfirmBooking";
@@ -421,6 +424,7 @@ export default function ChatWidget() {
 
           {mode === "schedule" && flowData.service && !selectedSlot ? (
             <AvailabilityPicker
+              service={flowData.service}
               availability={availability}
               onSelectSlot={setSelectedSlot}
               onSelectBack={() =>
@@ -685,14 +689,48 @@ function ChatTooltip({ content, children }) {
   );
 }
 
-function DetailsForm({ selectedDate, selectedTime }) {
+function DetailsForm({
+  selectedService,
+  selectedDate,
+  selectedTime,
+  onSelectBack,
+  onConfirm,
+}) {
+  const serviceLabel =
+    selectedService === "consultation"
+      ? "Online Mental Health Consultation"
+      : selectedService === "assessment"
+        ? "In-Person Psychological Assessment"
+        : selectedService;
+  const dateLabel = new Date(selectedDate).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center">
-      <p>
-        {selectedDate} at {selectedTime}
-      </p>
-      <div className="px-4 py-2 min-h-0 overflow-y-auto border border-t-slate-400">
-        <Form.Root className="w-[260px]">
+    <div className="w-full h-full flex flex-col items-center justify-start">
+      <div className="w-full flex flex-col px-4 py-4 border-b border-slate-200 mb-4">
+        <p className="font-semibold text-lg text-slate-900">{serviceLabel}</p>
+        <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
+          <Calendar className="h-4 w-4" />
+          {dateLabel}
+        </div>
+        <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
+          <Clock className="h-4 w-4" />
+          {selectedTime}
+        </div>
+      </div>
+      <div className="px-4 py-2 min-h-0 overflow-y-auto">
+        <Form.Root
+          className="w-[260px]"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onConfirm();
+            //handle
+          }}
+        >
           <Form.Field className="mb-2.5 grid" name="name">
             <div className="flex items-baseline justify-between">
               <Form.Label className="text-[15px] font-medium leading-[35px] text-slate-900">
@@ -707,8 +745,12 @@ function DetailsForm({ selectedDate, selectedTime }) {
             </div>
             <Form.Control asChild>
               <input
-                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded border border-slate-400 px-2.5 text-[15px] leading-none text-slate-900 focus:text-red"
+                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded-md px-2.5 text-[15px] leading-none text-black border border-slate-400 focus:outline-none focus:border-primary focus:border-2 transition-colors duration-300"
                 required
+                type="text"
+                name="name"
+                autoComplete="name"
+                placeholder="Your name..."
               />
             </Form.Control>
           </Form.Field>
@@ -732,17 +774,30 @@ function DetailsForm({ selectedDate, selectedTime }) {
             </div>
             <Form.Control asChild>
               <input
-                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded bg-blackA2 px-2.5 text-[15px] leading-none text-black shadow-[0_0_0_1px] shadow-blackA6 outline-none selection:border-primary selection:text-white hover:shadow-[0_0_0_1px_black] focus:border-primary"
+                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded-md px-2.5 text-[15px] leading-none text-black border border-slate-400 focus:outline-none focus:border-primary focus:border-2 transition-colors duration-300"
                 type="email"
                 required
+                placeholder="Your email..."
               />
             </Form.Control>
           </Form.Field>
-          <Form.Submit asChild>
-            <button className="mt-2.5 box-border inline-flex h-[35px] w-full items-center justify-center rounded bg-white px-[15px] font-medium leading-none text-violet11 shadow-[0_2px_10px] shadow-blackA4 hover:bg-mauve3 focus:shadow-[0_0_0_2px] focus:shadow-black focus:outline-none">
-              Post question
-            </button>
-          </Form.Submit>
+          <div className="flex flex-row items-center justify-between gap-3 mt-6">
+            <ChatTooltip content="Select Another Time">
+              <button
+                type="button"
+                className="border border-slate-500 px-3 py-2 rounded-full group flex flex-row gap-2 duration-300 transition-all ease-in-out hover:bg-primary/5 hover:border-primary"
+                onClick={onSelectBack}
+                aria-label="Select Another Time"
+              >
+                <ArrowLeft className="h-5 w-5 text-slate-500 transition-all duration-300 ease-out group-hover:-translate-x-1 group-hover:text-primary" />
+              </button>
+            </ChatTooltip>
+            <Form.Submit asChild>
+              <button className="flex-1 rounded-full px-3 py-2 bg-primary text-white transition-colors duration-300 ease-in-out hover:bg-primary/90">
+                Book Appointment
+              </button>
+            </Form.Submit>
+          </div>
         </Form.Root>
       </div>
     </div>
@@ -787,9 +842,15 @@ const getAvailability = async (service) => {
   return data.availability;
 };
 
-function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
+function AvailabilityPicker({
+  service,
+  availability,
+  onSelectSlot,
+  onSelectBack,
+}) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
+  const [sendRequest, setSendRequest] = useState(false);
 
   if (!availability || availability.length === 0) {
     return (
@@ -804,12 +865,33 @@ function AvailabilityPicker({ availability, onSelectSlot, onSelectBack }) {
   );
   const limitedDays = availableDays.slice(0, MAX_DATES);
 
+  if (selectedDate && selectedTime && sendRequest) {
+    return (
+      <>
+        <div>
+          Confirming request to book: {service}
+          Date and Time: {selectedDate} at {selectedTime}
+        </div>
+        <button onClick={() => setSelectedDate(null)}>Reset Date</button>
+        <button onClick={() => setSelectedTime(null)}>Reset Time</button>
+        <button onClick={() => setSendRequest(false)}>Reset Request</button>
+        <button onClick={onSelectBack}>Reset All</button>
+      </>
+    );
+  }
+
   if (selectedDate && selectedTime) {
     return (
       <>
-        <p>Details Form</p>
-        <div>{selectedTime}</div>
-        <DetailsForm selectedDate={selectedDate} selectedTime={selectedTime} />
+        {/* <p>Details Form</p> */}
+        {/* <div>{selectedTime}</div> */}
+        <DetailsForm
+          selectedService={service}
+          selectedDate={selectedDate}
+          selectedTime={selectedTime}
+          onSelectBack={() => setSelectedTime(null)}
+          onConfirm={() => setSendRequest(true)}
+        />
       </>
     );
   }
