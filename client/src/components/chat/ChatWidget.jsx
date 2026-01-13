@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useReducer } from "react";
 import { v4 as uuid } from "uuid";
 import {
   MessageCircle,
@@ -194,6 +194,45 @@ function groupByAbbreviation(slots) {
   return grouped;
 }
 
+const bookingInitialState = {
+  step: "idle", // idle | service | date | time | details | submitting | done
+  service: null,
+  date: null,
+  time: null,
+  contact: null,
+};
+
+function bookingReducer(state, action) {
+  switch (action.type) {
+    case "RESET":
+      return bookingInitialState;
+
+    default:
+      return state;
+
+    case "SELECT_SERVICE":
+      return {
+        ...bookingInitialState,
+        step: "date",
+        service: action.service,
+      };
+
+    case "SELECT_DATE":
+      return {
+        ...bookingInitialState,
+        step: "time",
+        date: action.date,
+      };
+
+    case "SELECT_TIME":
+      return {
+        ...bookingInitialState,
+        step: "details",
+        time: action.time,
+      };
+  }
+}
+
 export default function ChatWidget() {
   const stored = loadState();
 
@@ -219,6 +258,11 @@ export default function ChatWidget() {
   const [bookingResult, setBookingResult] = useState(null);
   const isConfirming = Boolean(selectedSlot && !flowData.bookingId);
 
+  const [booking, dispatchBooking] = useReducer(
+    bookingReducer,
+    bookingInitialState,
+  );
+
   useEffect(() => {
     saveState({
       sessionId,
@@ -231,12 +275,12 @@ export default function ChatWidget() {
 
   // NOTE: Fetch Availability
   useEffect(() => {
-    if (!flowData.service) return;
+    if (!booking.service) return;
 
     setLoadingAvailability(true);
     setAvailabilityError(null);
 
-    getAvailability(flowData.service)
+    getAvailability(booking.service)
       .then((data) => {
         console.log("Availability response: ", data);
         setAvailability(data);
@@ -246,7 +290,7 @@ export default function ChatWidget() {
         setAvailabilityError("Unable to load availability");
       })
       .finally(() => setLoadingAvailability(false));
-  }, [flowData.service]);
+  }, [booking.service]);
 
   const initialGreet = () => {
     if (hasGreeted) return;
@@ -351,7 +395,7 @@ export default function ChatWidget() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          service: flowData.service,
+          service: booking.service,
           slot: selectedSlot,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
@@ -414,25 +458,28 @@ export default function ChatWidget() {
           <ChatHeader onClose={() => setIsOpen(false)} />
 
           {showDebug && (
-            <p className="absolute text-center items-center justify-center w-full bg-primary">
-              {mode}
-            </p>
+            <div className="absolute text-center items-center justify-center w-full bg-primary flex flex-col">
+              <p>{mode}</p>
+              {selectedSlot && (
+                <p>
+                  {selectedSlot.date} {selectedSlot.time}
+                </p>
+              )}
+            </div>
           )}
 
-          {/* {mode !== "schedule" && flowData.service && ( */}
+          {/* {mode !== "schedule" && booking.service && ( */}
           {/* )} */}
 
-          {mode === "schedule" && flowData.service && !selectedSlot ? (
+          {mode === "schedule" && booking.service ? (
             <AvailabilityPicker
-              service={flowData.service}
+              service={booking.service}
               availability={availability}
-              onSelectSlot={setSelectedSlot}
+              onSelectSlot={(slot) => setSelectedSlot(...slot)}
               onSelectBack={() =>
-                setFlowData((f) => ({
-                  ...f,
-                  service: null,
-                }))
+                dispatchBooking({ type: "SELECT_SERVICE", service: null })
               }
+              dataRequest={flowData.request}
             />
           ) : (
             <ChatMessages messages={messages} isTyping={isTyping} />
@@ -454,7 +501,7 @@ export default function ChatWidget() {
             />
           )}
 
-          {mode === "schedule" && !flowData.service && (
+          {mode === "schedule" && !booking.service && (
             <ServicePicker
               onSelect={(service) => setFlowData((f) => ({ ...f, service }))}
             />
@@ -466,31 +513,13 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {mode !== "entry" && !flowData.service && !isConfirming && (
+          {mode !== "entry" && !booking.service && !isConfirming && (
             <ResetActions
               mode={mode}
               onSelect={(choice) => {
                 setMode(choice);
                 setSelectedSlot(null);
               }}
-            />
-          )}
-
-          {isConfirming && (
-            <ConfirmBooking
-              slot={{
-                ...selectedSlot,
-                weekday: new Date(selectedSlot.date).toLocaleDateString(
-                  "en-US",
-                  {
-                    weekday: "long",
-                  },
-                ),
-              }}
-              service={flowData.service}
-              loading={bookingLoading}
-              onConfirm={confirmBooking}
-              onBack={() => setSelectedSlot(null)}
             />
           )}
 
@@ -693,6 +722,7 @@ function DetailsForm({
   selectedService,
   selectedDate,
   selectedTime,
+  setContactInfo,
   onSelectBack,
   onConfirm,
 }) {
@@ -708,6 +738,9 @@ function DetailsForm({
     day: "numeric",
     year: "numeric",
   });
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-start">
@@ -727,6 +760,10 @@ function DetailsForm({
           className="w-[260px]"
           onSubmit={(e) => {
             e.preventDefault();
+            setContactInfo({
+              fullName: fullName,
+              email: email,
+            });
             onConfirm();
             //handle
           }}
@@ -751,6 +788,9 @@ function DetailsForm({
                 name="name"
                 autoComplete="name"
                 placeholder="Your name..."
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                }}
               />
             </Form.Control>
           </Form.Field>
@@ -778,6 +818,9 @@ function DetailsForm({
                 type="email"
                 required
                 placeholder="Your email..."
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                }}
               />
             </Form.Control>
           </Form.Field>
@@ -847,9 +890,11 @@ function AvailabilityPicker({
   availability,
   onSelectSlot,
   onSelectBack,
+  onConfirmRequest,
 }) {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
+  const [contactInfo, setContactInfo] = useState({});
   const [sendRequest, setSendRequest] = useState(false);
 
   if (!availability || availability.length === 0) {
@@ -858,12 +903,7 @@ function AvailabilityPicker({
     );
   }
 
-  const MAX_DATES = 10;
   const earliestDay = availability.find((d) => d.slots.length > 0);
-  const availableDays = availability.filter(
-    (day) => day.slots && day.slots.length > 0,
-  );
-  const limitedDays = availableDays.slice(0, MAX_DATES);
 
   if (selectedDate && selectedTime && sendRequest) {
     return (
@@ -871,6 +911,8 @@ function AvailabilityPicker({
         <div>
           Confirming request to book: {service}
           Date and Time: {selectedDate} at {selectedTime}
+          {/* Name: {contactInfo.fullName} */}
+          {/* Email: {contactInfo.email} */}
         </div>
         <button onClick={() => setSelectedDate(null)}>Reset Date</button>
         <button onClick={() => setSelectedTime(null)}>Reset Time</button>
@@ -889,8 +931,11 @@ function AvailabilityPicker({
           selectedService={service}
           selectedDate={selectedDate}
           selectedTime={selectedTime}
+          setContactInfo={setContactInfo}
           onSelectBack={() => setSelectedTime(null)}
-          onConfirm={() => setSendRequest(true)}
+          onConfirm={() => {
+            setSendRequest(true);
+          }}
         />
       </>
     );
@@ -915,7 +960,10 @@ function AvailabilityPicker({
                     <button
                       key={slot.slice(0, 5)}
                       className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
-                      onClick={() => setSelectedTime(slot)}
+                      onClick={() => {
+                        setSelectedTime(slot);
+                        onSelectSlot();
+                      }}
                     >
                       {slot.slice(0, 5)}
                     </button>
@@ -952,6 +1000,7 @@ function AvailabilityPicker({
     <DatePicker
       availability={availability}
       onSelectDate={setSelectedDate}
+      onSelectSlot={onSelectSlot}
       onSelectEarliest={() => setSelectedDate(earliestDay.date)}
       onSelectBack={onSelectBack}
     />
@@ -961,6 +1010,7 @@ function AvailabilityPicker({
 function DatePicker({
   availability,
   onSelectDate,
+  onSelectSlot,
   onSelectEarliest,
   onSelectBack,
 }) {
@@ -1009,7 +1059,10 @@ function DatePicker({
                       return (
                         <button
                           key={day.date}
-                          onClick={() => onSelectDate(day.date)}
+                          onClick={() => {
+                            onSelectDate(day.date);
+                            onSelectSlot({ date: day.date });
+                          }}
                           className="flex h-14 flex-col items-center justify-center rounded-md border text-xs hover:bg-primary/5"
                         >
                           <span className="text-sm font-semibold">
