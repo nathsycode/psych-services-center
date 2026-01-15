@@ -1,6 +1,6 @@
 /* TODO:
  * Add "ask questions" & "help schedule" floating icons on chat mode
- *
+ * Refactor sub actions?
  *
  */
 
@@ -242,6 +242,7 @@ const bookingInitialState = {
 };
 
 const ACTION_TYPES = Object.freeze({
+  IDLE: "idle",
   SELECT_SERVICE: "service",
   SELECT_DATE: "date",
   SELECT_TIME: "time",
@@ -255,6 +256,12 @@ function bookingReducer(state, action) {
   switch (action.type) {
     case ACTION_TYPES.RESET:
       return bookingInitialState;
+
+    case ACTION_TYPES.IDLE:
+      return {
+        ...bookingInitialState,
+        step: BOOKING_STEPS.IDLE
+      }
 
     case ACTION_TYPES.SELECT_SERVICE:
       return {
@@ -350,6 +357,7 @@ export default function ChatWidget() {
 
   // NOTE: Fetch Availability
   useEffect(() => {
+    console.log("use effect", booking.service)
     if (!booking.service) return;
     console.log("booking service", booking.service);
 
@@ -543,6 +551,10 @@ export default function ChatWidget() {
             </div>
           )}
 
+          {mode === MODES.APPOINTMENT && booking.step === BOOKING_STEPS.IDLE && (
+            <ChatMessages messages={messages} isTyping={isTyping} />
+          )}
+
           {mode === MODES.APPOINTMENT ? (
             <AvailabilityPicker
               booking={booking}
@@ -550,8 +562,10 @@ export default function ChatWidget() {
               dispatchBooking={dispatchBooking}
             />
           ) : (
+
             <ChatMessages messages={messages} isTyping={isTyping} />
-          )}
+          )
+          }
 
           {entryPhase === ENTRY_PHASES.ROOT && (
             <EntryActions
@@ -569,13 +583,25 @@ export default function ChatWidget() {
 
           {entryPhase === ENTRY_PHASES.APPOINTMENT && (
             <SubActions
-              subactions={appointmentSubactions}
+              subactions={entryActions.find((act) => act.action === MODES.APPOINTMENT).subactions}
               onSelect={(choice) => {
+                console.log("selecting appointment action", choice)
                 if (choice === SUBMODES.APPOINTMENT.SCHEDULE) {
-                  dispatchBooking({ type: ACTION_TYPES.SERVICE });
+                  console.log("proceed with booking process")
+                  dispatchBooking({ type: ACTION_TYPES.IDLE });
                   setEntryPhase(ENTRY_PHASES.NONE);
                   setMode(MODES.APPOINTMENT);
                 }
+              }}
+            />
+          )}
+
+          {entryPhase === ENTRY_PHASES.NONE && mode === MODES.QUESTION && (
+            <SubActions
+              subactions={entryActions.find((act) => act.action === MODES.QUESTION).subactions}
+              onSelect={(choice) => {
+                console.log("from widget", choice);
+                applySubAction(MODES.QUESTION, choice, { setMessages, setMode });
               }}
             />
           )}
@@ -586,12 +612,12 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {mode !== MODES.ENTRY && !booking.service && (
+          {entryPhase !== ENTRY_PHASES.ROOT && !booking.service && (
             <ResetActions
               mode={mode}
               onSelect={(choice) => {
-                setMode(choice);
-                setSelectedSlot(null);
+                setMode(MODES.ENTRY);
+                setEntryPhase(ENTRY_PHASES.ROOT);
               }}
             />
           )}
@@ -668,9 +694,8 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${
-            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-          }`}
+          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+            }`}
         >
           {message.content}
         </div>
@@ -730,9 +755,11 @@ function EntryActions({ onSelect }) {
 }
 
 function SubActions({ subactions, onSelect }) {
+  console.log(subactions)
   return (
-    <div className="space-y-2 px-4 flex flex-col">
+    <div className="space-y-2 mt-4 px-4 flex flex-col">
       {subactions.map((sub) => {
+        console.log(sub.sub)
         return (
           <button
             key={sub.sub}
@@ -922,7 +949,7 @@ function DetailsForm({ service, date, time, onSubmit, onBack }) {
 
 function ServicePicker({ onSelect }) {
   return (
-    <div className="space-y-2 p-4 flex flex-col">
+    <div className="space-y-2 p-4 flex flex-col flex-end justify-end">
       <button
         onClick={() => onSelect("consultation")}
         className="ml-auto text-right btn border-accent/75 border hover:bg-accent hover:text-white px-3 py-2 rounded-full text-sm transition-all duration-300"
@@ -940,6 +967,7 @@ function ServicePicker({ onSelect }) {
 }
 
 const getAvailability = async (service) => {
+  console.log("get avail", service);
   const res = await fetch(VITE_CALENDAR_AVAILABILITY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -959,20 +987,23 @@ const getAvailability = async (service) => {
 };
 
 function AvailabilityPicker({ booking, availability, dispatchBooking }) {
-  console.log(booking, availability, dispatchBooking);
+  console.log("availability: ", booking.step, availability, dispatchBooking);
 
-  if (!availability) return null;
+  // if (!availability) return null;
 
   switch (booking.step) {
-    case BOOKING_STEPS.SERVICE:
+    case BOOKING_STEPS.IDLE:
+      console.log("hello")
       return (
         <ServicePicker
-          onSelect={() =>
-            dispatchBooking({ type: ACTION_TYPES.SELECT_SERVICE })
+          onSelect={(service) => {
+            dispatchBooking({ type: ACTION_TYPES.SELECT_SERVICE, service });
+          }
           }
         />
       );
     case BOOKING_STEPS.DATE:
+      console.log("now we're on date")
       return (
         <DatePicker
           availability={availability}
