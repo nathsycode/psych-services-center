@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useReducer } from "react";
+/* TODO:
+ * Add "ask questions" & "help schedule" floating icons on chat mode
+ *
+ *
+ */
+
+import { useState, useEffect, useRef, useReducer, useMemo } from "react";
 import { v4 as uuid } from "uuid";
 import {
   MessageCircle,
@@ -12,7 +18,6 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
-import ConfirmBooking from "./ConfirmBooking";
 import { Tooltip, Form } from "radix-ui";
 
 const STORAGE_KEY = "chat_widget_state";
@@ -22,29 +27,51 @@ const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
 const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
 
+const MODES = Object.freeze({
+  ENTRY: "entry",
+  APPOINTMENT: "appointment",
+  SCHEDULE: "schedule",
+  QUESTION: "question",
+  CHAT: "chat",
+});
+
+const SUBMODES = Object.freeze({
+  APPOINTMENT: Object.freeze({
+    SCHEDULE: "schedule",
+    CANCEL: "cancel",
+    RESCHEDULE: "reschedule",
+  }),
+  QUESTION: Object.freeze({
+    SERVICES: "services",
+    CONTACT: "contact",
+    PRICING: "pricing",
+    OTHERS: "others",
+  }),
+});
+
 const entryActions = [
   {
-    action: "appointment",
+    action: MODES.APPOINTMENT,
     desc: "Schedule / Manage Appointment",
     userMsg: "Can you help me schedule / manage an appointment?",
     botMsg: "Sure! How would you like me to help?",
     subactions: [
       {
-        sub: "schedule",
+        sub: SUBMODES.APPOINTMENT.SCHEDULE,
         subDesc: "Schedule",
         userMsg: "I would like to schedule an appointment",
         botMsg:
           "Absolutely -- We offer online consultations and in-person assessment. Please let me know what interests you, as well as your preferred date and time.",
       },
       {
-        sub: "cancel",
+        sub: SUBMODES.APPOINTMENT.CANCEL,
         subDesc: "Cancel",
         userMsg: "I would like to cancel an upcoming appointment",
         botMsg:
           "Sorry to hear that. To proceed, kindly confirm your full name and email address.",
       },
       {
-        sub: "reschedule",
+        sub: SUBMODES.APPOINTMENT.RESCHEDULE,
         subDesc: "Reschedule",
         userMsg: "I would like to reschedule an existing appointment",
         botMsg:
@@ -53,28 +80,28 @@ const entryActions = [
     ],
   },
   {
-    action: "question",
+    action: MODES.QUESTION,
     desc: "Ask a Question",
     userMsg: "I want to learn more about something",
     botMsg:
       "Sure! I'd be happy to assist. What would you like to learn more about?",
     subactions: [
       {
-        sub: "services",
+        sub: SUBMODES.QUESTION.SERVICES,
         subDesc: "Our Services",
         userMsg: "Tell me more about your services",
         botMsg:
           "We offer a wide range of services, primarily online and private calls with our professional and licensed therapists, as well as in-person assessment with standardized testing. If you have further questions, I'd be happy to clarify.",
       },
       {
-        sub: "contact",
+        sub: SUBMODES.QUESTION.CONTACT,
         subDesc: "Our Contact Information",
         userMsg: "How can I contact you directly?",
         botMsg:
           "Sure, you may reach us via email at support@mindcare.com or phone at (+63)9 12 123 1234",
       },
       {
-        sub: "pricing",
+        sub: SUBMODES.QUESTION.PRICING,
         subDesc: "Our Pricing / Costs",
         userMsg:
           "I would like to know more about the details on the costs involved",
@@ -82,7 +109,7 @@ const entryActions = [
           "Absolutely, we offer free initial consultation and assessment, after that, our pricing gets tiered based on the test battery involved. To learn more about how each test battery and lab pricing, kindly see this link: mindcare.ph/tests",
       },
       {
-        sub: "others",
+        sub: SUBMODES.QUESTION.OTHERS,
         subDesc: "Other information",
         userMsg: "I would like to discuss something else",
         botMsg: "I understand, what do you have in mind?",
@@ -158,8 +185,9 @@ function applySubAction(mode, choice, { setMessages, setMode }) {
     ].filter(Boolean),
   );
 
-  if (choice !== "schedule") {
-    setMode("chat");
+  console.log(choice, MODES.SCHEDULE, SUBMODES.APPOINTMENT.SCHEDULE);
+  if (choice !== SUBMODES.APPOINTMENT.SCHEDULE) {
+    setMode(MODES.CHAT);
   } else {
     setMode(choice);
   }
@@ -194,56 +222,101 @@ function groupByAbbreviation(slots) {
   return grouped;
 }
 
+const BOOKING_STEPS = Object.freeze({
+  IDLE: "idle",
+  SERVICE: "service",
+  DATE: "date",
+  TIME: "time",
+  DETAILS: "details",
+  SUBMITTING: "submitting",
+  DONE: "done",
+  ERROR: "error",
+});
+
 const bookingInitialState = {
-  step: "idle", // idle | service | date | time | details | submitting | done
+  step: BOOKING_STEPS.IDLE, // idle | service | date | time | details | submitting | done
   service: null,
   date: null,
   time: null,
   contact: null,
 };
 
+const ACTION_TYPES = Object.freeze({
+  SELECT_SERVICE: "service",
+  SELECT_DATE: "date",
+  SELECT_TIME: "time",
+  BACK_TO_DATE: "back_date",
+  BACK_TO_TIME: "back_time",
+  RESET: "reset",
+  SUBMIT_DETAILS: "submit",
+});
+
 function bookingReducer(state, action) {
   switch (action.type) {
-    case "RESET":
+    case ACTION_TYPES.RESET:
       return bookingInitialState;
 
-    default:
-      return state;
-
-    case "SELECT_SERVICE":
+    case ACTION_TYPES.SELECT_SERVICE:
       return {
         ...bookingInitialState,
-        step: "date",
+        step: BOOKING_STEPS.DATE,
         service: action.service,
       };
 
-    case "SELECT_DATE":
+    case ACTION_TYPES.SELECT_DATE:
       return {
-        ...bookingInitialState,
-        step: "time",
+        ...state,
+        step: BOOKING_STEPS.TIME,
         date: action.date,
       };
 
-    case "SELECT_TIME":
+    case ACTION_TYPES.SELECT_TIME:
       return {
-        ...bookingInitialState,
-        step: "details",
+        ...state,
+        step: BOOKING_STEPS.DETAILS,
         time: action.time,
       };
+
+    case ACTION_TYPES.BACK_TO_DATE:
+      return {
+        ...state,
+        step: BOOKING_STEPS.DATE,
+        time: null,
+      };
+
+    case ACTION_TYPES.BACK_TO_TIME:
+      return {
+        ...state,
+        step: BOOKING_STEPS.TIME,
+      };
+
+    case ACTION_TYPES.SUBMIT_DETAILS:
+      return {
+        ...state,
+        step: BOOKING_STEPS.SUBMITTING,
+        contact: action.contact,
+      };
+
+    default:
+      return state;
   }
 }
+
+const ENTRY_PHASES = Object.freeze({
+  ROOT: "root",
+  APPOINTMENT: "appointment",
+  NONE: "none",
+});
 
 export default function ChatWidget() {
   const stored = loadState();
 
-  console.log(VITE_CALENDAR_AVAILABILITY_URL);
-
-  const [mode, setMode] = useState("entry");
+  const [mode, setMode] = useState(MODES.ENTRY);
+  const [entryPhase, setEntryPhase] = useState(ENTRY_PHASES.ROOT);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState(stored?.messages || []);
   const [isTyping, setIsTyping] = useState(false);
-  const [flowData, setFlowData] = useState({});
   const [showDebug, setShowDebug] = useState(false); //TODO: REMOVE ON PROD
 
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -256,7 +329,6 @@ export default function ChatWidget() {
   const [hasGreeted, setHasGreeted] = useState(stored?.hasGreeted || false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
-  const isConfirming = Boolean(selectedSlot && !flowData.bookingId);
 
   const [booking, dispatchBooking] = useReducer(
     bookingReducer,
@@ -269,13 +341,17 @@ export default function ChatWidget() {
       messages,
       hasGreeted,
       mode,
-      flowData,
     });
   }, [sessionId, messages, hasGreeted]);
+
+  useEffect(() => {
+    console.log("BOOKING STATE", booking);
+  }, [booking]);
 
   // NOTE: Fetch Availability
   useEffect(() => {
     if (!booking.service) return;
+    console.log("booking service", booking.service);
 
     setLoadingAvailability(true);
     setAvailabilityError(null);
@@ -384,8 +460,7 @@ export default function ChatWidget() {
       ]);
 
       setSelectedSlot(null);
-      setFlowData({});
-      setMode("chat");
+      setMode(MODES.CHAT);
       setBookingLoading(false);
       return;
     }
@@ -414,9 +489,8 @@ export default function ChatWidget() {
         ),
       ]);
 
-      setMode("chat");
+      setMode(MODES.CHAT);
       setSelectedSlot(null);
-      setFlowData({});
     } catch (err) {
       setMessages((m) => [
         ...m,
@@ -459,7 +533,8 @@ export default function ChatWidget() {
 
           {showDebug && (
             <div className="absolute text-center items-center justify-center w-full bg-primary flex flex-col">
-              <p>{mode}</p>
+              <p>{mode ? mode : ""}</p>
+              {/* {booking.service && <p>{booking.service}</p>} */}
               {selectedSlot && (
                 <p>
                   {selectedSlot.date} {selectedSlot.time}
@@ -468,42 +543,40 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {/* {mode !== "schedule" && booking.service && ( */}
-          {/* )} */}
-
-          {mode === "schedule" && booking.service ? (
+          {mode === MODES.APPOINTMENT ? (
             <AvailabilityPicker
-              service={booking.service}
+              booking={booking}
               availability={availability}
-              onSelectSlot={(slot) => setSelectedSlot(...slot)}
-              onSelectBack={() =>
-                dispatchBooking({ type: "SELECT_SERVICE", service: null })
-              }
-              dataRequest={flowData.request}
+              dispatchBooking={dispatchBooking}
             />
           ) : (
             <ChatMessages messages={messages} isTyping={isTyping} />
           )}
 
-          {mode === "entry" && (
+          {entryPhase === ENTRY_PHASES.ROOT && (
             <EntryActions
               onSelect={(choice) => {
-                applyEntryAction(choice, { setMessages, setMode });
-              }}
-            />
-          )}
-          {(mode === "appointment" || mode === "question") && (
-            <SubActions
-              mode={mode}
-              onSelect={(choice) => {
-                applySubAction(mode, choice, { setMessages, setMode });
+                if (choice === "question") {
+                  setEntryPhase(ENTRY_PHASES.NONE);
+                  setMode(MODES.QUESTION);
+                }
+                if (choice === "appointment") {
+                  setEntryPhase(ENTRY_PHASES.APPOINTMENT);
+                }
               }}
             />
           )}
 
-          {mode === "schedule" && !booking.service && (
-            <ServicePicker
-              onSelect={(service) => setFlowData((f) => ({ ...f, service }))}
+          {entryPhase === ENTRY_PHASES.APPOINTMENT && (
+            <SubActions
+              subactions={appointmentSubactions}
+              onSelect={(choice) => {
+                if (choice === SUBMODES.APPOINTMENT.SCHEDULE) {
+                  dispatchBooking({ type: ACTION_TYPES.SERVICE });
+                  setEntryPhase(ENTRY_PHASES.NONE);
+                  setMode(MODES.APPOINTMENT);
+                }
+              }}
             />
           )}
 
@@ -513,7 +586,7 @@ export default function ChatWidget() {
             </div>
           )}
 
-          {mode !== "entry" && !booking.service && !isConfirming && (
+          {mode !== MODES.ENTRY && !booking.service && (
             <ResetActions
               mode={mode}
               onSelect={(choice) => {
@@ -523,11 +596,8 @@ export default function ChatWidget() {
             />
           )}
 
-          {mode === "chat" && (
-            <ChatInput
-              onSend={sendMessage}
-              disabled={isTyping || isConfirming}
-            />
+          {mode === MODES.CHAT && (
+            <ChatInput onSend={sendMessage} disabled={isTyping} />
           )}
         </div>
       )}
@@ -659,12 +729,10 @@ function EntryActions({ onSelect }) {
   );
 }
 
-function SubActions({ mode, onSelect }) {
-  const action = entryActions.filter((act) => act.action === mode)[0];
-
+function SubActions({ subactions, onSelect }) {
   return (
     <div className="space-y-2 px-4 flex flex-col">
-      {action.subactions.map((sub) => {
+      {subactions.map((sub) => {
         return (
           <button
             key={sub.sub}
@@ -686,8 +754,8 @@ function ResetActions({ mode, onSelect }) {
         <ChatTooltip content="Start Over">
           <button
             className={`btn p-2 rounded-full hover:bg-slate-100
-            ${mode === "chat" ? "justify-center m-auto" : "ml-auto text-right"}`}
-            onClick={() => onSelect("entry")}
+            ${mode === MODES.CHAT ? "justify-center m-auto" : "ml-auto text-right"}`}
+            onClick={() => onSelect(MODES.ENTRY)}
           >
             <Undo2 className="w-4 h-4 text-slate-600 text-center" />
           </button>
@@ -718,29 +786,28 @@ function ChatTooltip({ content, children }) {
   );
 }
 
-function DetailsForm({
-  selectedService,
-  selectedDate,
-  selectedTime,
-  setContactInfo,
-  onSelectBack,
-  onConfirm,
-}) {
-  const serviceLabel =
-    selectedService === "consultation"
-      ? "Online Mental Health Consultation"
-      : selectedService === "assessment"
-        ? "In-Person Psychological Assessment"
-        : selectedService;
-  const dateLabel = new Date(selectedDate).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+function DetailsForm({ service, date, time, onSubmit, onBack }) {
+  const serviceLabel = useMemo(() => {
+    switch (service) {
+      case "consultation":
+        return "Online Mental Health Consultation";
+      case "assessment":
+        return "In-Person Psychological Assessment";
+    }
+  }, [service]);
+
+  const dateLabel = useMemo(() => {
+    return new Date(date).toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [date]);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const canSubmit = fullName.trim() && email.trim();
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-start">
@@ -752,7 +819,7 @@ function DetailsForm({
         </div>
         <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
           <Clock className="h-4 w-4" />
-          {selectedTime}
+          {time}
         </div>
       </div>
       <div className="px-4 py-2 min-h-0 overflow-y-auto">
@@ -760,12 +827,8 @@ function DetailsForm({
           className="w-[260px]"
           onSubmit={(e) => {
             e.preventDefault();
-            setContactInfo({
-              fullName: fullName,
-              email: email,
-            });
-            onConfirm();
-            //handle
+            if (!canSubmit) return;
+            onSubmit({ fullName, email });
           }}
         >
           <Form.Field className="mb-2.5 grid" name="name">
@@ -774,6 +837,7 @@ function DetailsForm({
                 Full Name*
               </Form.Label>
               <Form.Message
+                id="name-error"
                 className="text-[13px] text-red-500 opacity-80"
                 match="valueMissing"
               >
@@ -788,6 +852,8 @@ function DetailsForm({
                 name="name"
                 autoComplete="name"
                 placeholder="Your name..."
+                value={fullName}
+                aria-describedby="name-error"
                 onChange={(e) => {
                   setFullName(e.target.value);
                 }}
@@ -800,13 +866,15 @@ function DetailsForm({
                 Email*
               </Form.Label>
               <Form.Message
-                className="text-[13px] text-white opacity-80"
+                id="email-required"
+                className="text-[13px] text-red-600 opacity-80"
                 match="valueMissing"
               >
                 Please enter your email
               </Form.Message>
               <Form.Message
-                className="text-[13px] text-white opacity-80"
+                id="email-invalid"
+                className="text-[13px] text-red-600 opacity-80"
                 match="typeMismatch"
               >
                 Please provide a valid email
@@ -818,6 +886,8 @@ function DetailsForm({
                 type="email"
                 required
                 placeholder="Your email..."
+                aria-describedby="email-required email-invalid"
+                value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
                 }}
@@ -829,14 +899,17 @@ function DetailsForm({
               <button
                 type="button"
                 className="border border-slate-500 px-3 py-2 rounded-full group flex flex-row gap-2 duration-300 transition-all ease-in-out hover:bg-primary/5 hover:border-primary"
-                onClick={onSelectBack}
+                onClick={() => onBack()}
                 aria-label="Select Another Time"
               >
                 <ArrowLeft className="h-5 w-5 text-slate-500 transition-all duration-300 ease-out group-hover:-translate-x-1 group-hover:text-primary" />
               </button>
             </ChatTooltip>
             <Form.Submit asChild>
-              <button className="flex-1 rounded-full px-3 py-2 bg-primary text-white transition-colors duration-300 ease-in-out hover:bg-primary/90">
+              <button
+                disabled={!canSubmit}
+                className="flex-1 rounded-full px-3 py-2 bg-primary text-white transition-colors duration-300 ease-in-out hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Book Appointment
               </button>
             </Form.Submit>
@@ -885,135 +958,227 @@ const getAvailability = async (service) => {
   return data.availability;
 };
 
-function AvailabilityPicker({
-  service,
-  availability,
-  onSelectSlot,
-  onSelectBack,
-  onConfirmRequest,
-}) {
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
-  const [contactInfo, setContactInfo] = useState({});
-  const [sendRequest, setSendRequest] = useState(false);
+function AvailabilityPicker({ booking, availability, dispatchBooking }) {
+  console.log(booking, availability, dispatchBooking);
 
-  if (!availability || availability.length === 0) {
-    return (
-      <div className="p-4 text-sm text-slate-500">No available times found</div>
-    );
-  }
+  if (!availability) return null;
 
-  const earliestDay = availability.find((d) => d.slots.length > 0);
-
-  if (selectedDate && selectedTime && sendRequest) {
-    return (
-      <>
-        <div>
-          Confirming request to book: {service}
-          Date and Time: {selectedDate} at {selectedTime}
-          {/* Name: {contactInfo.fullName} */}
-          {/* Email: {contactInfo.email} */}
-        </div>
-        <button onClick={() => setSelectedDate(null)}>Reset Date</button>
-        <button onClick={() => setSelectedTime(null)}>Reset Time</button>
-        <button onClick={() => setSendRequest(false)}>Reset Request</button>
-        <button onClick={onSelectBack}>Reset All</button>
-      </>
-    );
-  }
-
-  if (selectedDate && selectedTime) {
-    return (
-      <>
-        {/* <p>Details Form</p> */}
-        {/* <div>{selectedTime}</div> */}
-        <DetailsForm
-          selectedService={service}
-          selectedDate={selectedDate}
-          selectedTime={selectedTime}
-          setContactInfo={setContactInfo}
-          onSelectBack={() => setSelectedTime(null)}
-          onConfirm={() => {
-            setSendRequest(true);
-          }}
+  switch (booking.step) {
+    case BOOKING_STEPS.SERVICE:
+      return (
+        <ServicePicker
+          onSelect={() =>
+            dispatchBooking({ type: ACTION_TYPES.SELECT_SERVICE })
+          }
         />
-      </>
-    );
+      );
+    case BOOKING_STEPS.DATE:
+      return (
+        <DatePicker
+          availability={availability}
+          onSelectDate={(date) => {
+            dispatchBooking({ type: ACTION_TYPES.SELECT_DATE, date });
+            console.log(date);
+          }}
+          onSelectBack={() => dispatchBooking({ type: ACTION_TYPES.RESET })}
+        />
+      );
+
+    case BOOKING_STEPS.TIME:
+      return (
+        <TimePicker
+          availability={availability}
+          selectedDate={booking.date}
+          onSelectTime={(time) =>
+            dispatchBooking({ type: ACTION_TYPES.SELECT_TIME, time })
+          }
+          onSelectBack={() =>
+            dispatchBooking({ type: ACTION_TYPES.BACK_TO_DATE })
+          }
+        />
+      );
+
+    case BOOKING_STEPS.DETAILS:
+      return (
+        <DetailsForm
+          service={booking.service}
+          date={booking.date}
+          time={booking.time}
+          onSubmit={(contact) =>
+            dispatchBooking({ type: ACTION_TYPES.SUBMIT_DETAILS, contact })
+          }
+          onBack={() => dispatchBooking({ type: ACTION_TYPES.BACK_TO_TIME })}
+        />
+      );
+
+    default:
+      return null;
   }
 
-  if (selectedDate) {
-    const day = availability.find((d) => d.date === selectedDate);
-    const grouped = groupByAbbreviation(day.slots);
-
-    return (
-      <div className="h-full min-h-0 flex flex-col p-4">
-        <div className="text-xs font-semibold">{day.date}</div>
-        <div className="text-xs">{day.weekday}</div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto py-2">
-          {Object.entries(grouped).map(([abb, slots]) => {
-            return (
-              <div className="flex flex-col">
-                <p className="font-semibold text-sm">{abb}</p>
-                <div className="grid grid-cols-4 gap-2 p-2 content-start">
-                  {slots.map((slot) => (
-                    <button
-                      key={slot.slice(0, 5)}
-                      className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
-                      onClick={() => {
-                        setSelectedTime(slot);
-                        onSelectSlot();
-                      }}
-                    >
-                      {slot.slice(0, 5)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="shrink-0 flex flex-row justify-center gap-4">
-          <ChatTooltip content="Go Back to Services">
-            <button
-              className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
-              onClick={onSelectBack}
-            >
-              <Undo2 className="h-5 w-5 text-slate-600" />
-            </button>
-          </ChatTooltip>
-          <ChatTooltip content="Search for Another Date">
-            <button
-              className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
-              onClick={() => setSelectedDate(null)}
-            >
-              <CalendarSearch className="h-5 w-5 text-slate-600" />
-            </button>
-          </ChatTooltip>
-        </div>
-      </div>
-    );
-  }
+  // const [selectedDate, setSelectedDate] = useState(null);
+  // const [selectedTime, setSelectedTime] = useState(null);
+  // const [contactInfo, setContactInfo] = useState({});
+  // const [sendRequest, setSendRequest] = useState(false);
+  //
+  // if (!availability || availability.length === 0) {
+  //   return (
+  //     <div className="p-4 text-sm text-slate-500">No available times found</div>
+  //   );
+  // }
+  //
+  // const earliestDay = availability.find((d) => d.slots.length > 0);
+  //
+  // if (selectedDate && selectedTime && sendRequest) {
+  //   return (
+  //     <>
+  //       <div>
+  //         Confirming request to book: {service}
+  //         Date and Time: {selectedDate} at {selectedTime}
+  //         {/* Name: {contactInfo.fullName} */}
+  //         {/* Email: {contactInfo.email} */}
+  //       </div>
+  //       <button onClick={() => setSelectedDate(null)}>Reset Date</button>
+  //       <button onClick={() => setSelectedTime(null)}>Reset Time</button>
+  //       <button onClick={() => setSendRequest(false)}>Reset Request</button>
+  //       <button onClick={onSelectBack}>Reset All</button>
+  //     </>
+  //   );
+  // }
+  //
+  // if (selectedDate && selectedTime) {
+  //   return (
+  //     <>
+  //       {/* <p>Details Form</p> */}
+  //       {/* <div>{selectedTime}</div> */}
+  //       <DetailsForm
+  //         selectedService={service}
+  //         selectedDate={selectedDate}
+  //         selectedTime={selectedTime}
+  //         setContactInfo={setContactInfo}
+  //         onSelectBack={() => setSelectedTime(null)}
+  //         onConfirm={() => {
+  //           setSendRequest(true);
+  //         }}
+  //       />
+  //     </>
+  //   );
+  // }
+  //
+  // if (selectedDate) {
+  //   const day = availability.find((d) => d.date === selectedDate);
+  //   const grouped = groupByAbbreviation(day.slots);
+  //
+  //   return (
+  //     <div className="h-full min-h-0 flex flex-col p-4">
+  //       <div className="text-xs font-semibold">{day.date}</div>
+  //       <div className="text-xs">{day.weekday}</div>
+  //
+  //       <div className="flex-1 min-h-0 overflow-y-auto py-2">
+  //         {Object.entries(grouped).map(([abb, slots]) => {
+  //           return (
+  //             <div className="flex flex-col">
+  //               <p className="font-semibold text-sm">{abb}</p>
+  //               <div className="grid grid-cols-4 gap-2 p-2 content-start">
+  //                 {slots.map((slot) => (
+  //                   <button
+  //                     key={slot.slice(0, 5)}
+  //                     className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
+  //                     onClick={() => {
+  //                       setSelectedTime(slot);
+  //                       onSelectSlot();
+  //                     }}
+  //                   >
+  //                     {slot.slice(0, 5)}
+  //                   </button>
+  //                 ))}
+  //               </div>
+  //             </div>
+  //           );
+  //         })}
+  //       </div>
+  //
+  //       <div className="shrink-0 flex flex-row justify-center gap-4">
+  //         <ChatTooltip content="Go Back to Services">
+  //           <button
+  //             className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
+  //             onClick={onSelectBack}
+  //           >
+  //             <Undo2 className="h-5 w-5 text-slate-600" />
+  //           </button>
+  //         </ChatTooltip>
+  //         <ChatTooltip content="Search for Another Date">
+  //           <button
+  //             className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
+  //             onClick={() => setSelectedDate(null)}
+  //           >
+  //             <CalendarSearch className="h-5 w-5 text-slate-600" />
+  //           </button>
+  //         </ChatTooltip>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+  //
+  // return (
+  //   <DatePicker
+  //     availability={availability}
+  //     onSelectDate={onSelectDate}
+  //     onSelectSlot={onSelectSlot}
+  //     onSelectEarliest={() => onSelectDate(earliestDay.date)}
+  //     onSelectBack={onSelectBack}
+  //   />
+  // );
+}
+function TimePicker({
+  availability,
+  selectedDate,
+  onSelectTime,
+  onSelectBack,
+}) {
+  const day = availability.find((d) => d.date === selectedDate);
+  const grouped = groupByAbbreviation(day.slots);
 
   return (
-    <DatePicker
-      availability={availability}
-      onSelectDate={setSelectedDate}
-      onSelectSlot={onSelectSlot}
-      onSelectEarliest={() => setSelectedDate(earliestDay.date)}
-      onSelectBack={onSelectBack}
-    />
+    <div className="h-full min-h-0 flex flex-col p-4">
+      <div className="text-xs font-semibold">{day.date}</div>
+      <div className="text-xs">{day.weekday}</div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto py-2">
+        {Object.entries(grouped).map(([abb, slots]) => {
+          return (
+            <div className="flex flex-col">
+              <p className="font-semibold text-sm">{abb}</p>
+              <div className="grid grid-cols-4 gap-2 p-2 content-start">
+                {slots.map((slot) => (
+                  <button
+                    key={slot.slice(0, 5)}
+                    className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
+                    onClick={() => onSelectTime(slot)}
+                  >
+                    {slot.slice(0, 5)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="shrink-0 flex flex-row justify-center gap-4">
+        <ChatTooltip content="Search for Another Date">
+          <button
+            className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
+            onClick={() => onSelectBack()}
+          >
+            <CalendarSearch className="h-5 w-5 text-slate-600" />
+          </button>
+        </ChatTooltip>
+      </div>
+    </div>
   );
 }
 
-function DatePicker({
-  availability,
-  onSelectDate,
-  onSelectSlot,
-  onSelectEarliest,
-  onSelectBack,
-}) {
+function DatePicker({ availability, onSelectDate, onSelectBack }) {
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(0);
 
@@ -1031,7 +1196,7 @@ function DatePicker({
       className="w-full flex flex-col flex-1 space-y-4 px-4 h-full"
     >
       <button
-        onClick={onSelectEarliest}
+        onClick={console.log("Selecting Earliest Not Working For Now")}
         className="mt-6 w-full shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
       >
         Book Earliest Available
@@ -1061,7 +1226,6 @@ function DatePicker({
                           key={day.date}
                           onClick={() => {
                             onSelectDate(day.date);
-                            onSelectSlot({ date: day.date });
                           }}
                           className="flex h-14 flex-col items-center justify-center rounded-md border text-xs hover:bg-primary/5"
                         >
