@@ -21,11 +21,14 @@ import { sendChatMessage } from "../../lib/chatApi";
 import { Tooltip, Form } from "radix-ui";
 
 const STORAGE_KEY = "chat_widget_state";
-// const VITE_CALENDAR_AVAILABILITY_URL =
-//   "http://localhost:5678/webhook-test/calendar/availability";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
 const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
+
+// HACK: TESTING ONLY
+// const VITE_CALENDAR_AVAILABILITY_URL =
+//   "http://localhost:5678/webhook-test/calendar/availability";
+const DEV = import.meta.env.DEV;
 
 const MODES = Object.freeze({
   ENTRY: "entry",
@@ -260,8 +263,8 @@ function bookingReducer(state, action) {
     case ACTION_TYPES.IDLE:
       return {
         ...bookingInitialState,
-        step: BOOKING_STEPS.IDLE
-      }
+        step: BOOKING_STEPS.IDLE,
+      };
 
     case ACTION_TYPES.SELECT_SERVICE:
       return {
@@ -326,7 +329,6 @@ export default function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false);
   const [showDebug, setShowDebug] = useState(false); //TODO: REMOVE ON PROD
 
-  const [selectedSlot, setSelectedSlot] = useState(null);
   const [availability, setAvailability] = useState(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState(null);
@@ -343,6 +345,7 @@ export default function ChatWidget() {
   );
 
   useEffect(() => {
+    // Local Storage
     saveState({
       sessionId,
       messages,
@@ -352,12 +355,13 @@ export default function ChatWidget() {
   }, [sessionId, messages, hasGreeted]);
 
   useEffect(() => {
+    // Debugging
     console.log("BOOKING STATE", booking);
   }, [booking]);
 
   // NOTE: Fetch Availability
   useEffect(() => {
-    console.log("use effect", booking.service)
+    console.log("use effect", booking.service);
     if (!booking.service) return;
     console.log("booking service", booking.service);
 
@@ -375,6 +379,33 @@ export default function ChatWidget() {
       })
       .finally(() => setLoadingAvailability(false));
   }, [booking.service]);
+
+  useEffect(() => {
+    if (booking.step !== BOOKING_STEPS.SUBMITTING) return;
+
+    async function submit() {
+      try {
+        await confirmBooking();
+
+        dispatchBooking({ type: ACTION_TYPES.RESET });
+        setMode(MODES.CHAT);
+
+        setMessages((m) => [
+          ...m,
+          inputChat("assistant", "✅ Your appointment has been booked."),
+        ]);
+      } catch {
+        dispatchBooking({ type: ACTION_TYPES.RESET });
+
+        setMessages((m) => [
+          ...m,
+          inputChat("assistant", "❌ Something went wrong. Please try again."),
+        ]);
+      }
+    }
+
+    submit();
+  }, [booking.step]);
 
   const initialGreet = () => {
     if (hasGreeted) return;
@@ -425,6 +456,7 @@ export default function ChatWidget() {
   };
 
   useEffect(() => {
+    // HACK: [] on keypress, for debug reload storage
     const handler = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === "R") {
         localStorage.removeItem(STORAGE_KEY);
@@ -437,6 +469,7 @@ export default function ChatWidget() {
   }, []);
 
   useEffect(() => {
+    // HACK: [] on keypress, for debug
     const handler = (e) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -447,6 +480,29 @@ export default function ChatWidget() {
 
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "x") {
         setShowDebug((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  useEffect(() => {
+    console.log(DEV);
+    if (!DEV) return;
+
+    const handler = (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "B") {
+        dispatchBooking({
+          type: ACTION_TYPES.SUBMIT_DETAILS,
+          service: "consultation",
+          date: "2016-01-20",
+          time: "12:00PM",
+          contact: {
+            fullName: "Dev Test",
+            email: "dev@test.com",
+          },
+        });
       }
     };
 
@@ -467,8 +523,6 @@ export default function ChatWidget() {
         inputChat("assistant", "(MOCK) Your appointment has been booked."),
       ]);
 
-      setSelectedSlot(null);
-      setMode(MODES.CHAT);
       setBookingLoading(false);
       return;
     }
@@ -479,7 +533,6 @@ export default function ChatWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           service: booking.service,
-          slot: selectedSlot,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
@@ -498,7 +551,6 @@ export default function ChatWidget() {
       ]);
 
       setMode(MODES.CHAT);
-      setSelectedSlot(null);
     } catch (err) {
       setMessages((m) => [
         ...m,
@@ -543,18 +595,13 @@ export default function ChatWidget() {
             <div className="absolute text-center items-center justify-center w-full bg-primary flex flex-col">
               <p>{mode ? mode : ""}</p>
               {/* {booking.service && <p>{booking.service}</p>} */}
-              {selectedSlot && (
-                <p>
-                  {selectedSlot.date} {selectedSlot.time}
-                </p>
-              )}
             </div>
           )}
           {/* NOTE: ChatMessages should show when booking step is not idle */}
 
           {mode !== MODES.APPOINTMENT ||
-            booking.step === BOOKING_STEPS.IDLE ||
-            booking.step === BOOKING_STEPS.SERVICE ? (
+          booking.step === BOOKING_STEPS.IDLE ||
+          booking.step === BOOKING_STEPS.SERVICE ? (
             <ChatMessages messages={messages} isTyping={isTyping} />
           ) : null}
 
@@ -584,11 +631,14 @@ export default function ChatWidget() {
 
           {entryPhase === ENTRY_PHASES.APPOINTMENT && (
             <SubActions
-              subactions={entryActions.find((act) => act.action === MODES.APPOINTMENT).subactions}
+              subactions={
+                entryActions.find((act) => act.action === MODES.APPOINTMENT)
+                  .subactions
+              }
               onSelect={(choice) => {
-                console.log("selecting appointment action", choice)
+                console.log("selecting appointment action", choice);
                 if (choice === SUBMODES.APPOINTMENT.SCHEDULE) {
-                  console.log("proceed with booking process")
+                  console.log("proceed with booking process");
                   dispatchBooking({ type: ACTION_TYPES.IDLE });
                   setEntryPhase(ENTRY_PHASES.NONE);
                   setMode(MODES.APPOINTMENT);
@@ -599,10 +649,16 @@ export default function ChatWidget() {
 
           {entryPhase === ENTRY_PHASES.NONE && mode === MODES.QUESTION && (
             <SubActions
-              subactions={entryActions.find((act) => act.action === MODES.QUESTION).subactions}
+              subactions={
+                entryActions.find((act) => act.action === MODES.QUESTION)
+                  .subactions
+              }
               onSelect={(choice) => {
                 console.log("from widget", choice);
-                applySubAction(MODES.QUESTION, choice, { setMessages, setMode });
+                applySubAction(MODES.QUESTION, choice, {
+                  setMessages,
+                  setMode,
+                });
               }}
             />
           )}
@@ -695,8 +751,9 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-            }`}
+          className={`rounded-lg px-3 py-2 text-sm ${
+            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+          }`}
         >
           {message.content}
         </div>
@@ -756,11 +813,11 @@ function EntryActions({ onSelect }) {
 }
 
 function SubActions({ subactions, onSelect }) {
-  console.log(subactions)
+  console.log(subactions);
   return (
     <div className="space-y-2 mt-4 px-4 flex flex-col">
       {subactions.map((sub) => {
-        console.log(sub.sub)
+        console.log(sub.sub);
         return (
           <button
             key={sub.sub}
@@ -987,35 +1044,38 @@ const getAvailability = async (service) => {
   return data.availability;
 };
 
-function AvailabilityPicker({ booking, availability, dispatchBooking, loadingAvailability, availabilityError }) {
-
+function AvailabilityPicker({
+  booking,
+  availability,
+  dispatchBooking,
+  loadingAvailability,
+  availabilityError,
+}) {
   // if (!availability) return null;
 
   if (booking.step !== BOOKING_STEPS.IDLE) {
     if (loadingAvailability) {
       return (
-        <div>
+        <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
           Loading availability...
         </div>
-      )
-    };
+      );
+    }
 
     if (availabilityError) {
       return (
         <div className="p-4 text-sm text-red-500">{availabilityError}</div>
-      )
-    };
+      );
+    }
 
     if (!availability || availability.length === 0) {
       return (
         <div className="p-4 text-sm text-slate-500">
           No available times found. Please try again later.
         </div>
-      )
+      );
     }
-
-  };
-
+  }
 
   switch (booking.step) {
     case BOOKING_STEPS.IDLE:
@@ -1023,8 +1083,7 @@ function AvailabilityPicker({ booking, availability, dispatchBooking, loadingAva
         <ServicePicker
           onSelect={(service) => {
             dispatchBooking({ type: ACTION_TYPES.SELECT_SERVICE, service });
-          }
-          }
+          }}
         />
       );
     case BOOKING_STEPS.DATE:
@@ -1063,6 +1122,13 @@ function AvailabilityPicker({ booking, availability, dispatchBooking, loadingAva
           }
           onBack={() => dispatchBooking({ type: ACTION_TYPES.BACK_TO_TIME })}
         />
+      );
+
+    case BOOKING_STEPS.SUBMITTING:
+      return (
+        <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
+          Booking your appointment...
+        </div>
       );
 
     default:
@@ -1233,8 +1299,7 @@ function TimePicker({
 }
 
 function DatePicker({ availability, onSelectDate, onSelectBack }) {
-
-  if (!availability) return (<div>No Availability Loaded</div>)
+  if (!availability) return <div>No Availability Loaded</div>;
 
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(0);
