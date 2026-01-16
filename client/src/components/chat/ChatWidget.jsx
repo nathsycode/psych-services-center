@@ -550,22 +550,23 @@ export default function ChatWidget() {
               )}
             </div>
           )}
+          {/* NOTE: ChatMessages should show when booking step is not idle */}
 
-          {mode === MODES.APPOINTMENT && booking.step === BOOKING_STEPS.IDLE && (
+          {mode !== MODES.APPOINTMENT ||
+            booking.step === BOOKING_STEPS.IDLE ||
+            booking.step === BOOKING_STEPS.SERVICE ? (
             <ChatMessages messages={messages} isTyping={isTyping} />
-          )}
+          ) : null}
 
-          {mode === MODES.APPOINTMENT ? (
+          {mode === MODES.APPOINTMENT && (
             <AvailabilityPicker
               booking={booking}
               availability={availability}
               dispatchBooking={dispatchBooking}
+              loadingAvailability={loadingAvailability}
+              availabilityError={availabilityError}
             />
-          ) : (
-
-            <ChatMessages messages={messages} isTyping={isTyping} />
-          )
-          }
+          )}
 
           {entryPhase === ENTRY_PHASES.ROOT && (
             <EntryActions
@@ -986,14 +987,38 @@ const getAvailability = async (service) => {
   return data.availability;
 };
 
-function AvailabilityPicker({ booking, availability, dispatchBooking }) {
-  console.log("availability: ", booking.step, availability, dispatchBooking);
+function AvailabilityPicker({ booking, availability, dispatchBooking, loadingAvailability, availabilityError }) {
 
   // if (!availability) return null;
 
+  if (booking.step !== BOOKING_STEPS.IDLE) {
+    if (loadingAvailability) {
+      return (
+        <div>
+          Loading availability...
+        </div>
+      )
+    };
+
+    if (availabilityError) {
+      return (
+        <div className="p-4 text-sm text-red-500">{availabilityError}</div>
+      )
+    };
+
+    if (!availability || availability.length === 0) {
+      return (
+        <div className="p-4 text-sm text-slate-500">
+          No available times found. Please try again later.
+        </div>
+      )
+    }
+
+  };
+
+
   switch (booking.step) {
     case BOOKING_STEPS.IDLE:
-      console.log("hello")
       return (
         <ServicePicker
           onSelect={(service) => {
@@ -1003,13 +1028,11 @@ function AvailabilityPicker({ booking, availability, dispatchBooking }) {
         />
       );
     case BOOKING_STEPS.DATE:
-      console.log("now we're on date")
       return (
         <DatePicker
           availability={availability}
           onSelectDate={(date) => {
             dispatchBooking({ type: ACTION_TYPES.SELECT_DATE, date });
-            console.log(date);
           }}
           onSelectBack={() => dispatchBooking({ type: ACTION_TYPES.RESET })}
         />
@@ -1210,6 +1233,9 @@ function TimePicker({
 }
 
 function DatePicker({ availability, onSelectDate, onSelectBack }) {
+
+  if (!availability) return (<div>No Availability Loaded</div>)
+
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(0);
 
