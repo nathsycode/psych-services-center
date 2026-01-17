@@ -23,7 +23,8 @@ import { Tooltip, Form } from "radix-ui";
 const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
-const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
+// const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
+const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
 
 // HACK: TESTING ONLY
 // const VITE_CALENDAR_AVAILABILITY_URL =
@@ -169,6 +170,18 @@ function applyEntryAction(choice, { setMessages, setMode }) {
   );
 }
 
+async function bookAppointment(payload) {
+  const res = await fetch(VITE_BOOKING_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) throw new Error("Booking failed");
+
+  return res.json();
+}
+
 function applySubAction(mode, choice, { setMessages, setMode }) {
   const entry = entryActions.find((a) => a.action === mode);
 
@@ -253,6 +266,7 @@ const ACTION_TYPES = Object.freeze({
   BACK_TO_TIME: "back_time",
   RESET: "reset",
   SUBMIT_DETAILS: "submit",
+  DEV_FORCE_SUBMIT: "dev_force_submit",
 });
 
 function bookingReducer(state, action) {
@@ -306,6 +320,15 @@ function bookingReducer(state, action) {
         step: BOOKING_STEPS.SUBMITTING,
         contact: action.contact,
       };
+
+    case ACTION_TYPES.DEV_FORCE_SUBMIT:
+      return {
+        step: BOOKING_STEPS.SUBMITTING,
+        service: action.service,
+        date: action.date,
+        time: action.time,
+        contact: action.contact,
+      }
 
     default:
       return state;
@@ -494,10 +517,10 @@ export default function ChatWidget() {
     const handler = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === "B") {
         dispatchBooking({
-          type: ACTION_TYPES.SUBMIT_DETAILS,
+          type: ACTION_TYPES.DEV_FORCE_SUBMIT,
           service: "consultation",
-          date: "2016-01-20",
-          time: "12:00PM",
+          date: "2026-01-20",
+          time: "12:00 PM",
           contact: {
             fullName: "Dev Test",
             email: "dev@test.com",
@@ -510,55 +533,34 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const USE_MOCK_BOOKING = true; //TODO: REMOVE
+  // const USE_MOCK_BOOKING = true; //TODO: REMOVE
 
   const confirmBooking = async () => {
     setBookingLoading(true);
 
-    if (USE_MOCK_BOOKING) {
-      await new Promise((r) => setTimeout(r, 800));
+    // if (USE_MOCK_BOOKING) {
+    //   await new Promise((r) => setTimeout(r, 800));
+    //
+    //   setMessages((m) => [
+    //     ...m,
+    //     inputChat("assistant", "(MOCK) Your appointment has been booked."),
+    //   ]);
+    //
+    //   setBookingLoading(false);
+    //   return;
+    // }
 
-      setMessages((m) => [
-        ...m,
-        inputChat("assistant", "(MOCK) Your appointment has been booked."),
-      ]);
-
-      setBookingLoading(false);
-      return;
-    }
+    console.log("confirmBooking", VITE_BOOKING_URL);
 
     try {
-      const res = await fetch(VITE_BOOKING_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service: booking.service,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      });
-
-      if (!res.ok) throw new Error("Booking failed");
-
-      const data = await res.json();
-      setBookingResult(data);
-
-      setMessages((m) => [
-        ...m,
-        inputChat(
-          "assistant",
-          "✅ Your appointment has been booked. You’ll receive a confirmation shortly.",
-        ),
-      ]);
-
-      setMode(MODES.CHAT);
-    } catch (err) {
-      setMessages((m) => [
-        ...m,
-        inputChat(
-          "assistant",
-          "Something went wrong while booking. Please try again.",
-        ),
-      ]);
+      return await bookAppointment({
+        service: booking.service,
+        date: booking.date,
+        time: booking.time,
+        contact: booking.contact.fullName,
+        email: booking.contact.email,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      })
     } finally {
       setBookingLoading(false);
     }
@@ -600,8 +602,8 @@ export default function ChatWidget() {
           {/* NOTE: ChatMessages should show when booking step is not idle */}
 
           {mode !== MODES.APPOINTMENT ||
-          booking.step === BOOKING_STEPS.IDLE ||
-          booking.step === BOOKING_STEPS.SERVICE ? (
+            booking.step === BOOKING_STEPS.IDLE ||
+            booking.step === BOOKING_STEPS.SERVICE ? (
             <ChatMessages messages={messages} isTyping={isTyping} />
           ) : null}
 
@@ -751,9 +753,8 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${
-            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-          }`}
+          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+            }`}
         >
           {message.content}
         </div>
