@@ -17,6 +17,9 @@ import {
   Clock,
   ArrowLeft,
   Video,
+  Brain,
+  User,
+  ChartNoAxesGantt,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import { Tooltip, Form } from "radix-ui";
@@ -1424,38 +1427,89 @@ function BookingConfirmation({ booking, onDone }) {
   return (
     <div className="p-4 gap-2 flex flex-col">
       <p className="text-slate-900 font-semibold text-lg">
-        Your meeting is scheduled
+        Your meeting is scheduled!
       </p>
       <p className="text-slate-600 text-sm">
-        An email with meeting details have been sent to {booking.contact.email}
+        An email with meeting details have been sent to {booking.contact.email}.
       </p>
 
-      <div className="flex flex-col gap-3 p-4 border border-slate-400 rounded-md mx-4 mt-6">
-        {booking.date && (
+      <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md mx-4 mt-4">
+        <h1 className="flex flex-row gap-2 group items-center justify-center">
+          <Brain className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-lg">MindCare Center</span>
+        </h1>
+        <h3 className="text-center text-sm">
+          {booking.service === "consultation"
+            ? "Online Mental Health Consultation"
+            : booking.service === "assessment"
+              ? "In-Person Psychological Assessment"
+              : ""}
+        </h3>
+        <div className="flex flex-col mt-2">
           <div className="flex flex-row gap-2 items-center group">
-            <div classname="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-              <Calendar classname="h-4 w-4" />
+            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <User className="h-4 w-4" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+              {booking.contact.fullName}
+            </span>
+          </div>
+          <div className="flex flex-row gap-2 items-center group">
+            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <Calendar className="h-4 w-4" />
             </div>
             <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
               {date}
             </span>
           </div>
-        )}
-        {booking.result.data.callLink && (
-          <ChatTooltip content={booking.result.data.callLink}>
-            <a
-              href={booking.result.data.callLink}
-              target="_blank"
-              className="btn-primary flex flex-row gap-2 items-center group"
-            >
-              <div classname="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-                <Video classname="h-4 w-4" />
-              </div>
-              <span className="text-sm text-slate-600">Call Link</span>
-            </a>
-          </ChatTooltip>
-        )}
+          <div className="flex flex-row gap-2 items-center group">
+            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <Clock className="h-4 w-4" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+              {booking.time}
+            </span>
+          </div>
+          {booking.result.data.callLink && (
+            <ChatTooltip content={booking.result.data.callLink}>
+              <a
+                href={booking.result.data.callLink}
+                target="_blank"
+                className="btn-primary flex flex-row gap-2 items-center group"
+              >
+                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                  <Video className="h-4 w-4" />
+                </div>
+                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                  Link to Call
+                </span>
+              </a>
+            </ChatTooltip>
+          )}
+          {booking.result.data.manageLink && (
+            <ChatTooltip content={booking.result.data.manageLink}>
+              <a
+                href={booking.result.data.manageLink}
+                target="_blank"
+                className="btn-primary flex flex-row gap-2 items-center group"
+              >
+                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                  <ChartNoAxesGantt className="h-4 w-4" />
+                </div>
+                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                  Manage Booking
+                </span>
+              </a>
+            </ChatTooltip>
+          )}
+        </div>
       </div>
+      <button
+        onClick={onDone}
+        className="text-xs text-slate-600 underline pt-2 hover:text-primary px-2 mx-auto"
+      >
+        Back to Chat
+      </button>
     </div>
   );
 }
