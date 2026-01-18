@@ -16,6 +16,7 @@ import {
   Calendar,
   Clock,
   ArrowLeft,
+  Video,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import { Tooltip, Form } from "radix-ui";
@@ -23,8 +24,8 @@ import { Tooltip, Form } from "radix-ui";
 const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
-// const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
-const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
+const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
+// const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
 
 // HACK: TESTING ONLY
 // const VITE_CALENDAR_AVAILABILITY_URL =
@@ -179,7 +180,11 @@ async function bookAppointment(payload) {
 
   if (!res.ok) throw new Error("Booking failed");
 
-  return res.json();
+  const data = await res.json();
+
+  console.log("booking response", data);
+
+  return data;
 }
 
 function applySubAction(mode, choice, { setMessages, setMode }) {
@@ -255,6 +260,7 @@ const bookingInitialState = {
   date: null,
   time: null,
   contact: null,
+  result: null,
 };
 
 const ACTION_TYPES = Object.freeze({
@@ -266,6 +272,7 @@ const ACTION_TYPES = Object.freeze({
   BACK_TO_TIME: "back_time",
   RESET: "reset",
   SUBMIT_DETAILS: "submit",
+  BOOKING_SUCCESS: "booking_success",
   DEV_FORCE_SUBMIT: "dev_force_submit",
 });
 
@@ -321,6 +328,13 @@ function bookingReducer(state, action) {
         contact: action.contact,
       };
 
+    case ACTION_TYPES.BOOKING_SUCCESS:
+      return {
+        ...state,
+        step: BOOKING_STEPS.DONE,
+        result: action.result,
+      };
+
     case ACTION_TYPES.DEV_FORCE_SUBMIT:
       return {
         step: BOOKING_STEPS.SUBMITTING,
@@ -328,7 +342,7 @@ function bookingReducer(state, action) {
         date: action.date,
         time: action.time,
         contact: action.contact,
-      }
+      };
 
     default:
       return state;
@@ -408,14 +422,15 @@ export default function ChatWidget() {
 
     async function submit() {
       try {
-        await confirmBooking();
+        const res = await confirmBooking();
 
-        dispatchBooking({ type: ACTION_TYPES.RESET });
-        setMode(MODES.CHAT);
-
+        dispatchBooking({ type: ACTION_TYPES.BOOKING_SUCCESS, result: res });
         setMessages((m) => [
           ...m,
-          inputChat("assistant", "✅ Your appointment has been booked."),
+          inputChat(
+            "assistant",
+            "✅ Thank you! Your appointment has been booked. You'll receive a confirmation email shortly.",
+          ),
         ]);
       } catch {
         dispatchBooking({ type: ACTION_TYPES.RESET });
@@ -516,10 +531,11 @@ export default function ChatWidget() {
 
     const handler = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === "B") {
+        setMode(MODES.APPOINTMENT);
         dispatchBooking({
           type: ACTION_TYPES.DEV_FORCE_SUBMIT,
           service: "consultation",
-          date: "2026-01-20",
+          date: "2026-01-21",
           time: "12:00 PM",
           contact: {
             fullName: "Dev Test",
@@ -533,34 +549,18 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // const USE_MOCK_BOOKING = true; //TODO: REMOVE
-
   const confirmBooking = async () => {
     setBookingLoading(true);
-
-    // if (USE_MOCK_BOOKING) {
-    //   await new Promise((r) => setTimeout(r, 800));
-    //
-    //   setMessages((m) => [
-    //     ...m,
-    //     inputChat("assistant", "(MOCK) Your appointment has been booked."),
-    //   ]);
-    //
-    //   setBookingLoading(false);
-    //   return;
-    // }
-
-    console.log("confirmBooking", VITE_BOOKING_URL);
 
     try {
       return await bookAppointment({
         service: booking.service,
         date: booking.date,
         time: booking.time,
-        contact: booking.contact.fullName,
+        name: booking.contact.fullName,
         email: booking.contact.email,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      })
+      });
     } finally {
       setBookingLoading(false);
     }
@@ -602,8 +602,8 @@ export default function ChatWidget() {
           {/* NOTE: ChatMessages should show when booking step is not idle */}
 
           {mode !== MODES.APPOINTMENT ||
-            booking.step === BOOKING_STEPS.IDLE ||
-            booking.step === BOOKING_STEPS.SERVICE ? (
+          booking.step === BOOKING_STEPS.IDLE ||
+          booking.step === BOOKING_STEPS.SERVICE ? (
             <ChatMessages messages={messages} isTyping={isTyping} />
           ) : null}
 
@@ -617,7 +617,7 @@ export default function ChatWidget() {
             />
           )}
 
-          {entryPhase === ENTRY_PHASES.ROOT && (
+          {mode === MODES.ENTRY && entryPhase === ENTRY_PHASES.ROOT && (
             <EntryActions
               onSelect={(choice) => {
                 if (choice === "question") {
@@ -631,7 +631,7 @@ export default function ChatWidget() {
             />
           )}
 
-          {entryPhase === ENTRY_PHASES.APPOINTMENT && (
+          {mode === MODES.ENTRY && entryPhase === ENTRY_PHASES.APPOINTMENT && (
             <SubActions
               subactions={
                 entryActions.find((act) => act.action === MODES.APPOINTMENT)
@@ -753,8 +753,9 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-            }`}
+          className={`rounded-lg px-3 py-2 text-sm ${
+            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+          }`}
         >
           {message.content}
         </div>
@@ -1132,6 +1133,16 @@ function AvailabilityPicker({
         </div>
       );
 
+    case BOOKING_STEPS.DONE:
+      return (
+        <BookingConfirmation
+          booking={booking}
+          onDone={() => {
+            dispatchBooking({ type: ACTION_TYPES.RESET });
+            setMode(MODES.CHAT);
+          }}
+        />
+      );
     default:
       return null;
   }
@@ -1397,6 +1408,53 @@ function DatePicker({ availability, onSelectDate, onSelectBack }) {
             Next
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function BookingConfirmation({ booking, onDone }) {
+  const date = new Date(booking.date).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <div className="p-4 gap-2 flex flex-col">
+      <p className="text-slate-900 font-semibold text-lg">
+        Your meeting is scheduled
+      </p>
+      <p className="text-slate-600 text-sm">
+        An email with meeting details have been sent to {booking.contact.email}
+      </p>
+
+      <div className="flex flex-col gap-3 p-4 border border-slate-400 rounded-md mx-4 mt-6">
+        {booking.date && (
+          <div className="flex flex-row gap-2 items-center group">
+            <div classname="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <Calendar classname="h-4 w-4" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+              {date}
+            </span>
+          </div>
+        )}
+        {booking.result.data.callLink && (
+          <ChatTooltip content={booking.result.data.callLink}>
+            <a
+              href={booking.result.data.callLink}
+              target="_blank"
+              className="btn-primary flex flex-row gap-2 items-center group"
+            >
+              <div classname="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                <Video classname="h-4 w-4" />
+              </div>
+              <span className="text-sm text-slate-600">Call Link</span>
+            </a>
+          </ChatTooltip>
+        )}
       </div>
     </div>
   );
