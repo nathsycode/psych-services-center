@@ -1,11 +1,4 @@
-/* TODO:
- * Add "ask questions" & "help schedule" floating icons on chat mode
- * Refactor sub actions?
- *
- */
-
 import { useState, useEffect, useRef, useReducer, useMemo } from "react";
-import { v4 as uuid } from "uuid";
 import {
   MessageCircle,
   X,
@@ -23,6 +16,7 @@ import {
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import { Tooltip, Form } from "radix-ui";
+import useDevShortcuts from "../../hooks/useDevShortcuts";
 
 const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
@@ -31,6 +25,7 @@ const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
 // const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
 
 // HACK: TESTING ONLY
+
 // const VITE_CALENDAR_AVAILABILITY_URL =
 //   "http://localhost:5678/webhook-test/calendar/availability";
 const DEV = import.meta.env.DEV;
@@ -185,8 +180,6 @@ async function bookAppointment(payload) {
 
   const data = await res.json();
 
-  console.log("booking response", data);
-
   return data;
 }
 
@@ -199,8 +192,6 @@ function applySubAction(mode, choice, { setMessages, setMode }) {
 
   if (!subAction) return;
 
-  console.log(subAction, choice);
-
   setMessages((m) =>
     [
       ...m,
@@ -209,7 +200,6 @@ function applySubAction(mode, choice, { setMessages, setMode }) {
     ].filter(Boolean),
   );
 
-  console.log(choice, MODES.SCHEDULE, SUBMODES.APPOINTMENT.SCHEDULE);
   if (choice !== SUBMODES.APPOINTMENT.SCHEDULE) {
     setMode(MODES.CHAT);
   } else {
@@ -254,7 +244,6 @@ const BOOKING_STEPS = Object.freeze({
   DETAILS: "details",
   SUBMITTING: "submitting",
   DONE: "done",
-  ERROR: "error",
 });
 
 const bookingInitialState = {
@@ -267,7 +256,7 @@ const bookingInitialState = {
 };
 
 const ACTION_TYPES = Object.freeze({
-  IDLE: "idle",
+  START_BOOKING: "start",
   SELECT_SERVICE: "service",
   SELECT_DATE: "date",
   SELECT_TIME: "time",
@@ -284,10 +273,10 @@ function bookingReducer(state, action) {
     case ACTION_TYPES.RESET:
       return bookingInitialState;
 
-    case ACTION_TYPES.IDLE:
+    case ACTION_TYPES.START_BOOKING:
       return {
         ...bookingInitialState,
-        step: BOOKING_STEPS.IDLE,
+        step: BOOKING_STEPS.SERVICE,
       };
 
     case ACTION_TYPES.SELECT_SERVICE:
@@ -384,6 +373,8 @@ export default function ChatWidget() {
     bookingInitialState,
   );
 
+  // useDevShortcuts({ setShowDebug, dispatchBooking, setMode });
+
   useEffect(() => {
     // Local Storage
     saveState({
@@ -392,7 +383,7 @@ export default function ChatWidget() {
       hasGreeted,
       mode,
     });
-  }, [sessionId, messages, hasGreeted]);
+  }, [sessionId, messages, hasGreeted, mode]);
 
   useEffect(() => {
     // Debugging
@@ -401,16 +392,13 @@ export default function ChatWidget() {
 
   // NOTE: Fetch Availability
   useEffect(() => {
-    console.log("use effect", booking.service);
     if (!booking.service) return;
-    console.log("booking service", booking.service);
 
     setLoadingAvailability(true);
     setAvailabilityError(null);
 
     getAvailability(booking.service)
       .then((data) => {
-        console.log("Availability response: ", data);
         setAvailability(data);
       })
       .catch((err) => {
@@ -487,8 +475,6 @@ export default function ChatWidget() {
       });
 
       setMessages((m) => [...m, inputChat("assistant", data.reply)]);
-
-      console.log("AI Intent", data.intent);
     } catch (err) {
       console.error("Chat Error:", err);
     } finally {
@@ -528,35 +514,11 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  useEffect(() => {
-    console.log(DEV);
-    if (!DEV) return;
-
-    const handler = (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "B") {
-        setMode(MODES.APPOINTMENT);
-        dispatchBooking({
-          type: ACTION_TYPES.DEV_FORCE_SUBMIT,
-          service: "consultation",
-          date: "2026-01-21",
-          time: "12:00 PM",
-          contact: {
-            fullName: "Dev Test",
-            email: "dev@test.com",
-          },
-        });
-      }
-    };
-
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
   const confirmBooking = async () => {
     setBookingLoading(true);
 
     try {
-      return await bookAppointment({
+      const result = await bookAppointment({
         service: booking.service,
         date: booking.date,
         time: booking.time,
@@ -564,6 +526,20 @@ export default function ChatWidget() {
         email: booking.contact.email,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
+
+      setBookingResult(result);
+      return result;
+    } catch {
+      const errorResult = {
+        result: "error",
+        error: {
+          code: "UNKNOWN_ERROR",
+          message: "Something went wrong while booking. Please try again.",
+          retryable: true,
+        },
+      };
+      setBookingResult(errorResult);
+      throw errorResult;
     } finally {
       setBookingLoading(false);
     }
@@ -611,12 +587,16 @@ export default function ChatWidget() {
           ) : null}
 
           {mode === MODES.APPOINTMENT && (
-            <AvailabilityPicker
+            <BookingFlow
               booking={booking}
               availability={availability}
               dispatchBooking={dispatchBooking}
               loadingAvailability={loadingAvailability}
               availabilityError={availabilityError}
+              onDone={() => {
+                dispatchBooking({ type: ACTION_TYPES.RESET });
+                setMode(MODES.CHAT);
+              }}
             />
           )}
 
@@ -641,10 +621,8 @@ export default function ChatWidget() {
                   .subactions
               }
               onSelect={(choice) => {
-                console.log("selecting appointment action", choice);
                 if (choice === SUBMODES.APPOINTMENT.SCHEDULE) {
-                  console.log("proceed with booking process");
-                  dispatchBooking({ type: ACTION_TYPES.IDLE });
+                  dispatchBooking({ type: ACTION_TYPES.START_BOOKING });
                   setEntryPhase(ENTRY_PHASES.NONE);
                   setMode(MODES.APPOINTMENT);
                 }
@@ -659,7 +637,6 @@ export default function ChatWidget() {
                   .subactions
               }
               onSelect={(choice) => {
-                console.log("from widget", choice);
                 applySubAction(MODES.QUESTION, choice, {
                   setMessages,
                   setMode,
@@ -818,11 +795,9 @@ function EntryActions({ onSelect }) {
 }
 
 function SubActions({ subactions, onSelect }) {
-  console.log(subactions);
   return (
     <div className="space-y-2 mt-4 px-4 flex flex-col">
       {subactions.map((sub) => {
-        console.log(sub.sub);
         return (
           <button
             key={sub.sub}
@@ -1030,7 +1005,6 @@ function ServicePicker({ onSelect }) {
 }
 
 const getAvailability = async (service) => {
-  console.log("get avail", service);
   const res = await fetch(VITE_CALENDAR_AVAILABILITY_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1049,37 +1023,24 @@ const getAvailability = async (service) => {
   return data.availability;
 };
 
-function AvailabilityPicker({
+function BookingFlow({
   booking,
   availability,
   dispatchBooking,
   loadingAvailability,
   availabilityError,
+  onDone,
 }) {
   // if (!availability) return null;
 
-  if (booking.step !== BOOKING_STEPS.IDLE) {
-    if (loadingAvailability) {
-      return (
-        <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
-          Loading availability...
-        </div>
-      );
-    }
+  const needsAvailability =
+    booking.step !== BOOKING_STEPS.IDLE &&
+    booking.step !== BOOKING_STEPS.SERVICE;
 
-    if (availabilityError) {
-      return (
-        <div className="p-4 text-sm text-red-500">{availabilityError}</div>
-      );
-    }
-
-    if (!availability || availability.length === 0) {
-      return (
-        <div className="p-4 text-sm text-slate-500">
-          No available times found. Please try again later.
-        </div>
-      );
-    }
+  if (needsAvailability) {
+    if (loadingAvailability) return <Loading />;
+    if (availabilityError) return <Error />;
+    if (!availability || availability.length === 0) return <Empty />;
   }
 
   switch (booking.step) {
@@ -1137,133 +1098,12 @@ function AvailabilityPicker({
       );
 
     case BOOKING_STEPS.DONE:
-      return (
-        <BookingConfirmation
-          booking={booking}
-          onDone={() => {
-            dispatchBooking({ type: ACTION_TYPES.RESET });
-            setMode(MODES.CHAT);
-          }}
-        />
-      );
+      return <BookingConfirmation booking={booking} onDone={onDone} />;
     default:
       return null;
   }
-
-  // const [selectedDate, setSelectedDate] = useState(null);
-  // const [selectedTime, setSelectedTime] = useState(null);
-  // const [contactInfo, setContactInfo] = useState({});
-  // const [sendRequest, setSendRequest] = useState(false);
-  //
-  // if (!availability || availability.length === 0) {
-  //   return (
-  //     <div className="p-4 text-sm text-slate-500">No available times found</div>
-  //   );
-  // }
-  //
-  // const earliestDay = availability.find((d) => d.slots.length > 0);
-  //
-  // if (selectedDate && selectedTime && sendRequest) {
-  //   return (
-  //     <>
-  //       <div>
-  //         Confirming request to book: {service}
-  //         Date and Time: {selectedDate} at {selectedTime}
-  //         {/* Name: {contactInfo.fullName} */}
-  //         {/* Email: {contactInfo.email} */}
-  //       </div>
-  //       <button onClick={() => setSelectedDate(null)}>Reset Date</button>
-  //       <button onClick={() => setSelectedTime(null)}>Reset Time</button>
-  //       <button onClick={() => setSendRequest(false)}>Reset Request</button>
-  //       <button onClick={onSelectBack}>Reset All</button>
-  //     </>
-  //   );
-  // }
-  //
-  // if (selectedDate && selectedTime) {
-  //   return (
-  //     <>
-  //       {/* <p>Details Form</p> */}
-  //       {/* <div>{selectedTime}</div> */}
-  //       <DetailsForm
-  //         selectedService={service}
-  //         selectedDate={selectedDate}
-  //         selectedTime={selectedTime}
-  //         setContactInfo={setContactInfo}
-  //         onSelectBack={() => setSelectedTime(null)}
-  //         onConfirm={() => {
-  //           setSendRequest(true);
-  //         }}
-  //       />
-  //     </>
-  //   );
-  // }
-  //
-  // if (selectedDate) {
-  //   const day = availability.find((d) => d.date === selectedDate);
-  //   const grouped = groupByAbbreviation(day.slots);
-  //
-  //   return (
-  //     <div className="h-full min-h-0 flex flex-col p-4">
-  //       <div className="text-xs font-semibold">{day.date}</div>
-  //       <div className="text-xs">{day.weekday}</div>
-  //
-  //       <div className="flex-1 min-h-0 overflow-y-auto py-2">
-  //         {Object.entries(grouped).map(([abb, slots]) => {
-  //           return (
-  //             <div className="flex flex-col">
-  //               <p className="font-semibold text-sm">{abb}</p>
-  //               <div className="grid grid-cols-4 gap-2 p-2 content-start">
-  //                 {slots.map((slot) => (
-  //                   <button
-  //                     key={slot.slice(0, 5)}
-  //                     className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
-  //                     onClick={() => {
-  //                       setSelectedTime(slot);
-  //                       onSelectSlot();
-  //                     }}
-  //                   >
-  //                     {slot.slice(0, 5)}
-  //                   </button>
-  //                 ))}
-  //               </div>
-  //             </div>
-  //           );
-  //         })}
-  //       </div>
-  //
-  //       <div className="shrink-0 flex flex-row justify-center gap-4">
-  //         <ChatTooltip content="Go Back to Services">
-  //           <button
-  //             className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
-  //             onClick={onSelectBack}
-  //           >
-  //             <Undo2 className="h-5 w-5 text-slate-600" />
-  //           </button>
-  //         </ChatTooltip>
-  //         <ChatTooltip content="Search for Another Date">
-  //           <button
-  //             className="p-2 rounded-full hover:bg-primary/5 transition-all duration-300"
-  //             onClick={() => setSelectedDate(null)}
-  //           >
-  //             <CalendarSearch className="h-5 w-5 text-slate-600" />
-  //           </button>
-  //         </ChatTooltip>
-  //       </div>
-  //     </div>
-  //   );
-  // }
-  //
-  // return (
-  //   <DatePicker
-  //     availability={availability}
-  //     onSelectDate={onSelectDate}
-  //     onSelectSlot={onSelectSlot}
-  //     onSelectEarliest={() => onSelectDate(earliestDay.date)}
-  //     onSelectBack={onSelectBack}
-  //   />
-  // );
 }
+
 function TimePicker({
   availability,
   selectedDate,
@@ -1333,7 +1173,7 @@ function DatePicker({ availability, onSelectDate, onSelectBack }) {
       className="w-full flex flex-col flex-1 space-y-4 px-4 h-full"
     >
       <button
-        onClick={console.log("Selecting Earliest Not Working For Now")}
+        onClick={() => onSelectDate(availableDays[0].date)}
         className="mt-6 w-full shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-white hover:bg-primary/90"
       >
         Book Earliest Available
@@ -1424,6 +1264,10 @@ function BookingConfirmation({ booking, onDone }) {
     year: "numeric",
   });
 
+  if (!booking.result || booking.result.result !== "success") {
+    return null;
+  }
+
   return (
     <div className="p-4 gap-2 flex flex-col">
       <p className="text-slate-900 font-semibold text-lg">
@@ -1512,4 +1356,16 @@ function BookingConfirmation({ booking, onDone }) {
       </button>
     </div>
   );
+}
+
+function Loading() {
+  return <div>Loading availability....</div>;
+}
+
+function Error() {
+  return <div>Error...</div>;
+}
+
+function Empty() {
+  return <div>Empty...</div>;
 }
