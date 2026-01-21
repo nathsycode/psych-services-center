@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useReducer, useMemo } from "react";
 import {
+  Loader2,
   MessageCircle,
   X,
   Send,
@@ -153,12 +154,10 @@ function inputChat(role, content) {
   };
 }
 
-function applyEntryAction(choice, { setMessages, setMode }) {
+function applyEntryAction(choice, setMessages) {
   const entry = entryActions.find((a) => a.action === choice);
 
   if (!entry) return;
-
-  setMode(entry.action);
 
   setMessages((m) =>
     [
@@ -183,11 +182,7 @@ async function bookAppointment(payload) {
   return data;
 }
 
-function applySubAction(mode, choice, { setMessages, setMode }) {
-  const entry = entryActions.find((a) => a.action === mode);
-
-  if (!entry) return;
-
+function applySubAction(entry, choice, setMessages) {
   const subAction = entry.subactions.find((sub) => sub.sub === choice);
 
   if (!subAction) return;
@@ -199,12 +194,6 @@ function applySubAction(mode, choice, { setMessages, setMode }) {
       subAction.botMsg && inputChat("assistant", subAction.botMsg),
     ].filter(Boolean),
   );
-
-  if (choice !== SUBMODES.APPOINTMENT.SCHEDULE) {
-    setMode(MODES.CHAT);
-  } else {
-    setMode(choice);
-  }
 }
 
 function groupByYearMonth(days) {
@@ -367,6 +356,7 @@ export default function ChatWidget() {
   const [hasGreeted, setHasGreeted] = useState(stored?.hasGreeted || false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingResult, setBookingResult] = useState(null);
+  const [availabilityTimedOut, setAvailabilityTimedOut] = useState(false);
 
   const [booking, dispatchBooking] = useReducer(
     bookingReducer,
@@ -396,6 +386,7 @@ export default function ChatWidget() {
 
     setLoadingAvailability(true);
     setAvailabilityError(null);
+    setAvailabilityTimedOut(false);
 
     getAvailability(booking.service)
       .then((data) => {
@@ -403,7 +394,9 @@ export default function ChatWidget() {
       })
       .catch((err) => {
         console.error(err);
-        setAvailabilityError("Unable to load availability");
+        setAvailabilityError(
+          "Unable to load availability. Please try again later.",
+        );
       })
       .finally(() => setLoadingAvailability(false));
   }, [booking.service]);
@@ -597,12 +590,15 @@ export default function ChatWidget() {
                 dispatchBooking({ type: ACTION_TYPES.RESET });
                 setMode(MODES.CHAT);
               }}
+              availabilityTimedOut={availabilityTimedOut}
+              setAvailabilityTimedOut={() => setAvailabilityTimedOut}
             />
           )}
 
           {mode === MODES.ENTRY && entryPhase === ENTRY_PHASES.ROOT && (
             <EntryActions
               onSelect={(choice) => {
+                applyEntryAction(choice, setMessages);
                 if (choice === "question") {
                   setEntryPhase(ENTRY_PHASES.NONE);
                   setMode(MODES.QUESTION);
@@ -621,6 +617,10 @@ export default function ChatWidget() {
                   .subactions
               }
               onSelect={(choice) => {
+                const entry = entryActions.find(
+                  (act) => act.action === MODES.APPOINTMENT,
+                );
+                applySubAction(entry, choice, setMessages);
                 if (choice === SUBMODES.APPOINTMENT.SCHEDULE) {
                   dispatchBooking({ type: ACTION_TYPES.START_BOOKING });
                   setEntryPhase(ENTRY_PHASES.NONE);
@@ -1030,6 +1030,8 @@ function BookingFlow({
   loadingAvailability,
   availabilityError,
   onDone,
+  availabilityTimedOut,
+  setAvailabilityTimedOut,
 }) {
   // if (!availability) return null;
 
@@ -1038,13 +1040,56 @@ function BookingFlow({
     booking.step !== BOOKING_STEPS.SERVICE;
 
   if (needsAvailability) {
-    if (loadingAvailability) return <Loading />;
-    if (availabilityError) return <Error />;
-    if (!availability || availability.length === 0) return <Empty />;
+    if (loadingAvailability && !availabilityTimedOut)
+      return (
+        <Loading
+          label="Loading availability..."
+          timeoutMs={8000}
+          onTimeout={() => {
+            setAvailabilityTimedOut(true);
+          }}
+        />
+      );
+
+    if (availabilityTimedOut) {
+      return (
+        <Error
+          message="This is taking longer than expected."
+          retryable
+          onRetry={() => {
+            setAvailabilityTimedOut(false);
+            // refetchAvailability();
+          }}
+          onCancel={() => {
+            dispatchBooking({ type: ACTION_TYPES.REST });
+            setMode(MODES.CHAT);
+          }}
+        />
+      );
+    }
+    if (availabilityError)
+      return (
+        <Error
+          message={availabilityError}
+          retryable
+          // onRetry={() => refetchAvailability()}
+          onCancel={() => {
+            dispatchBooking({ type: ACTION_TYPES.RESET });
+            setMode(MODES.CHAT);
+          }}
+        />
+      );
+    if (!availability || availability.length === 0)
+      return (
+        <Empty
+          message="No available times found. Please try again later or contact support at support@mindcare.ph."
+          onRetry={() => refetchAvailability}
+        />
+      );
   }
 
   switch (booking.step) {
-    case BOOKING_STEPS.IDLE:
+    case BOOKING_STEPS.SERVICE:
       return (
         <ServicePicker
           onSelect={(service) => {
@@ -1358,14 +1403,55 @@ function BookingConfirmation({ booking, onDone }) {
   );
 }
 
-function Loading() {
-  return <div>Loading availability....</div>;
+function Loading({ label = "Loading availability...", timeoutMs, onTimeout }) {
+  const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    setTimedOut(false);
+  }, [timeoutMs]);
+
+  useEffect(() => {
+    if (!timeoutMs) return;
+
+    const id = setTimeout(() => {
+      setTimedOut(true);
+      onTimeout?.();
+    }, timeoutMs);
+
+    return () => {
+      clearTimeout(id);
+    };
+  }, [timeoutMs, onTimeout]);
+
+  if (timedOut) {
+    return (
+      <div className="text-sm text-slate-500 text-center px-4">
+        This is taking longer than expected...
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <Spinner label={label} />
+    </div>
+  );
 }
 
-function Error() {
-  return <div>Error...</div>;
+function Error({ message, retryable, onRetry, onCancel }) {
+  console.log(message);
+  return <div>Error</div>;
 }
 
 function Empty() {
   return <div>Empty...</div>;
+}
+
+function Spinner({ label }) {
+  return (
+    <div className="flex items-center gap-2 text-slate-500">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      {label && <span className="text-sm">{label}</span>}
+    </div>
+  );
 }
