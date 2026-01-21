@@ -31,7 +31,7 @@ const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
 //   "http://localhost:5678/webhook-test/calendar/availability";
 const DEV = import.meta.env.DEV;
 
-const MODES = Object.freeze({
+export const MODES = Object.freeze({
   ENTRY: "entry",
   APPOINTMENT: "appointment",
   SCHEDULE: "schedule",
@@ -51,6 +51,19 @@ const SUBMODES = Object.freeze({
     PRICING: "pricing",
     OTHERS: "others",
   }),
+});
+
+export const ACTION_TYPES = Object.freeze({
+  START_BOOKING: "start",
+  SELECT_SERVICE: "service",
+  SELECT_DATE: "date",
+  SELECT_TIME: "time",
+  BACK_TO_DATE: "back_date",
+  BACK_TO_TIME: "back_time",
+  RESET: "reset",
+  SUBMIT_DETAILS: "submit",
+  BOOKING_SUCCESS: "booking_success",
+  DEV_FORCE_SUBMIT: "dev_force_submit",
 });
 
 const entryActions = [
@@ -244,19 +257,6 @@ const bookingInitialState = {
   result: null,
 };
 
-const ACTION_TYPES = Object.freeze({
-  START_BOOKING: "start",
-  SELECT_SERVICE: "service",
-  SELECT_DATE: "date",
-  SELECT_TIME: "time",
-  BACK_TO_DATE: "back_date",
-  BACK_TO_TIME: "back_time",
-  RESET: "reset",
-  SUBMIT_DETAILS: "submit",
-  BOOKING_SUCCESS: "booking_success",
-  DEV_FORCE_SUBMIT: "dev_force_submit",
-});
-
 function bookingReducer(state, action) {
   switch (action.type) {
     case ACTION_TYPES.RESET:
@@ -363,7 +363,27 @@ export default function ChatWidget() {
     bookingInitialState,
   );
 
-  // useDevShortcuts({ setShowDebug, dispatchBooking, setMode });
+  useDevShortcuts({ setShowDebug, dispatchBooking, setMode });
+
+  const fetchAvailability = () => {
+    if (!booking.service) return;
+
+    setLoadingAvailability(true);
+    setAvailabilityError(null);
+    setAvailabilityTimedOut(false);
+
+    getAvailability(booking.service)
+      .then((data) => {
+        setAvailability(data);
+      })
+      .catch((err) => {
+        console.error(err);
+        setAvailabilityError(
+          "Unable to load availability. Please try again later.",
+        );
+      })
+      .finally(() => setLoadingAvailability(false));
+  };
 
   useEffect(() => {
     // Local Storage
@@ -382,23 +402,7 @@ export default function ChatWidget() {
 
   // NOTE: Fetch Availability
   useEffect(() => {
-    if (!booking.service) return;
-
-    setLoadingAvailability(true);
-    setAvailabilityError(null);
-    setAvailabilityTimedOut(false);
-
-    getAvailability(booking.service)
-      .then((data) => {
-        setAvailability(data);
-      })
-      .catch((err) => {
-        console.error(err);
-        setAvailabilityError(
-          "Unable to load availability. Please try again later.",
-        );
-      })
-      .finally(() => setLoadingAvailability(false));
+    fetchAvailability();
   }, [booking.service]);
 
   useEffect(() => {
@@ -591,7 +595,10 @@ export default function ChatWidget() {
                 setMode(MODES.CHAT);
               }}
               availabilityTimedOut={availabilityTimedOut}
-              setAvailabilityTimedOut={() => setAvailabilityTimedOut}
+              setAvailabilityTimedOut={setAvailabilityTimedOut}
+              fetchAvailability={fetchAvailability}
+              setMode={setMode}
+              setEntryPhase={setEntryPhase}
             />
           )}
 
@@ -643,12 +650,6 @@ export default function ChatWidget() {
                 });
               }}
             />
-          )}
-
-          {availabilityError && (
-            <div className="px-4 py-2 text-sm text-red-500">
-              {availabilityError}
-            </div>
           )}
 
           {entryPhase !== ENTRY_PHASES.ROOT && !booking.service && (
@@ -1032,6 +1033,9 @@ function BookingFlow({
   onDone,
   availabilityTimedOut,
   setAvailabilityTimedOut,
+  fetchAvailability,
+  setMode,
+  setEntryPhase,
 }) {
   // if (!availability) return null;
 
@@ -1040,12 +1044,27 @@ function BookingFlow({
     booking.step !== BOOKING_STEPS.SERVICE;
 
   if (needsAvailability) {
+    if (availabilityError)
+      return (
+        <ErrorMessage
+          message={availabilityError}
+          retryable
+          onRetry={() => fetchAvailability()}
+          onCancel={() => {
+            dispatchBooking({ type: ACTION_TYPES.RESET });
+            setMode(MODES.ENTRY);
+            setEntryPhase(ENTRY_PHASES.ROOT);
+          }}
+        />
+      );
+
     if (loadingAvailability && !availabilityTimedOut)
       return (
         <Loading
           label="Loading availability..."
-          timeoutMs={8000}
+          timeoutMs={1000}
           onTimeout={() => {
+            console.log("timed out");
             setAvailabilityTimedOut(true);
           }}
         />
@@ -1053,37 +1072,32 @@ function BookingFlow({
 
     if (availabilityTimedOut) {
       return (
-        <Error
+        <ErrorMessage
           message="This is taking longer than expected."
           retryable
           onRetry={() => {
             setAvailabilityTimedOut(false);
-            // refetchAvailability();
+            fetchAvailability();
           }}
           onCancel={() => {
-            dispatchBooking({ type: ACTION_TYPES.REST });
-            setMode(MODES.CHAT);
+            dispatchBooking({ type: ACTION_TYPES.RESET });
+            setMode(MODES.ENTRY);
+            setEntryPhase(ENTRY_PHASES.ROOT);
           }}
         />
       );
     }
-    if (availabilityError)
-      return (
-        <Error
-          message={availabilityError}
-          retryable
-          // onRetry={() => refetchAvailability()}
-          onCancel={() => {
-            dispatchBooking({ type: ACTION_TYPES.RESET });
-            setMode(MODES.CHAT);
-          }}
-        />
-      );
+
     if (!availability || availability.length === 0)
       return (
         <Empty
           message="No available times found. Please try again later or contact support at support@mindcare.ph."
-          onRetry={() => refetchAvailability}
+          onRetry={() => fetchAvailability()}
+          onCancel={() => {
+            dispatchBooking({ type: ACTION_TYPES.RESET });
+            setMode(MODES.ENTRY);
+            setEntryPhase(ENTRY_PHASES.ROOT);
+          }}
         />
       );
   }
@@ -1423,28 +1437,69 @@ function Loading({ label = "Loading availability...", timeoutMs, onTimeout }) {
     };
   }, [timeoutMs, onTimeout]);
 
-  if (timedOut) {
-    return (
-      <div className="text-sm text-slate-500 text-center px-4">
-        This is taking longer than expected...
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 flex items-center justify-center">
+    <div className="flex-1 flex flex-col items-center justify-center">
       <Spinner label={label} />
+      {timedOut && (
+        <div className="text-sm text-slate-500 text-center px-4">
+          This is taking longer than expected...
+        </div>
+      )}
     </div>
   );
 }
 
-function Error({ message, retryable, onRetry, onCancel }) {
-  console.log(message);
-  return <div>Error</div>;
+function ErrorMessage({ message, retryable, onRetry, onCancel }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-4 text-center flex-1">
+      <CircleAlert className="h-8 w-8 mb-2 text-red-500" />
+      <p className="text-sm text-slate-600">{message}</p>
+      {retryable && (
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={onRetry}
+            className="rounded-full bg-red-500 px-4 py-2 text-white text-sm hover:bg-red-600"
+          >
+            Retry
+          </button>
+          <button
+            onClick={onCancel}
+            className="rounded-full border border-red-500 px-4 py-2 text-red-500 text-sm hover:bg-red-50"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function Empty() {
-  return <div>Empty...</div>;
+function Empty({ message, onRetry, onCancel }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-4 text-center flex-1">
+      <CircleAlert className="h-8 w-8 mb-2 text-primary" />
+      <p className="text-sm text-slate-600">{message}</p>
+      <div className="flex gap-2 mt-4">
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="rounded-full bg-primary px-4 py-2 text-white text-sm hover:bg-primary/90"
+          >
+            Try Again
+          </button>
+        )}
+
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            className="rounded-full border border-slate-500 px-4 py-2 text-slate-700 text-sm hover:bg-slate-100"
+          >
+            Go Back
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function Spinner({ label }) {

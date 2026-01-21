@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import { MODES, ACTION_TYPES } from "../components/chat/ChatWidget";
+
 export default function useDevShortcuts({
   setShowDebug,
   dispatchBooking,
