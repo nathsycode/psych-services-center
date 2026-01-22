@@ -63,6 +63,7 @@ export const ACTION_TYPES = Object.freeze({
   RESET: "reset",
   SUBMIT_DETAILS: "submit",
   BOOKING_SUCCESS: "booking_success",
+  BOOKING_FAILURE: "booking_failure",
   DEV_FORCE_SUBMIT: "dev_force_submit",
 });
 
@@ -188,7 +189,19 @@ async function bookAppointment(payload) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error("Booking failed");
+  if (!res.ok) {
+    const errorData = await res.json();
+    return {
+      result: "error",
+      error: {
+        code: errorData.error?.code || "UNKNOWN_ERROR",
+        message:
+          errorData.error?.message ||
+          "A booking error occured. Please try again later.",
+        retryable: errorData.error?.retryable === true,
+      },
+    };
+  }
 
   const data = await res.json();
 
@@ -255,6 +268,7 @@ const bookingInitialState = {
   time: null,
   contact: null,
   result: null,
+  error: null,
 };
 
 function bookingReducer(state, action) {
@@ -314,6 +328,14 @@ function bookingReducer(state, action) {
         ...state,
         step: BOOKING_STEPS.DONE,
         result: action.result,
+      };
+
+    case ACTION_TYPES.BOOKING_FAILURE:
+      return {
+        ...state,
+        step: BOOKING_STEPS.DONE,
+        result: action.result,
+        error: action.error,
       };
 
     case ACTION_TYPES.DEV_FORCE_SUBMIT:
@@ -405,14 +427,21 @@ export default function ChatWidget() {
     fetchAvailability();
   }, [booking.service]);
 
-  useEffect(() => {
-    if (booking.step !== BOOKING_STEPS.SUBMITTING) return;
+  const processBookingSubmission = async () => {
+    setBookingLoading(true);
 
-    async function submit() {
-      try {
-        const res = await confirmBooking();
+    try {
+      const result = await bookAppointment({
+        service: booking.service,
+        date: booking.date,
+        time: booking.time,
+        name: booking.contact.fullName,
+        email: booking.contact.email,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
 
-        dispatchBooking({ type: ACTION_TYPES.BOOKING_SUCCESS, result: res });
+      if (result.result === "success") {
+        dispatchBooking({ type: ACTION_TYPES.BOOKING_SUCCESS, result: result });
         setMessages((m) => [
           ...m,
           inputChat(
@@ -420,17 +449,59 @@ export default function ChatWidget() {
             "✅ Thank you! Your appointment has been booked. You'll receive a confirmation email shortly.",
           ),
         ]);
-      } catch {
-        dispatchBooking({ type: ACTION_TYPES.RESET });
+      } else {
+        console.error("Booking submission error", result);
+
+        const errorMessage =
+          result.error?.message || "An unexpected error occured.";
+        const retryable = result.error?.retryable || false;
+
+        dispatchBooking({
+          type: ACTION_TYPES.BOOKING_FAILURE,
+          result: result,
+          error: result.error,
+        });
 
         setMessages((m) => [
           ...m,
-          inputChat("assistant", "❌ Something went wrong. Please try again."),
+          inputChat(
+            "assistant",
+            `❌ ${errorMessage} ${retryable ? "Please try again." : ""}`,
+          ),
         ]);
       }
-    }
 
-    submit();
+      return result;
+    } catch (unexpectedError) {
+      console.error("Unexpected booking submission error", unexpectedError);
+
+      dispatchBooking({
+        type: ACTION_TYPES.BOOKING_FAILURE,
+        result: { result: "error" },
+        error: {
+          code: "UNEXPECTED_EXCEPTION",
+          message:
+            "A severe network or unexpected error occured. Please check your internet connection and try again.",
+          retryable: true,
+        },
+      });
+
+      setMessages((m) => [
+        ...m,
+        inputChat(
+          "assistant",
+          `❌ An error occured. Please check your network and try again`,
+        ),
+      ]);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (booking.step !== BOOKING_STEPS.SUBMITTING) return;
+
+    processBookingSubmission();
   }, [booking.step]);
 
   const initialGreet = () => {
@@ -512,34 +583,7 @@ export default function ChatWidget() {
   }, []);
 
   const confirmBooking = async () => {
-    setBookingLoading(true);
-
-    try {
-      const result = await bookAppointment({
-        service: booking.service,
-        date: booking.date,
-        time: booking.time,
-        name: booking.contact.fullName,
-        email: booking.contact.email,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-
-      setBookingResult(result);
-      return result;
-    } catch {
-      const errorResult = {
-        result: "error",
-        error: {
-          code: "UNKNOWN_ERROR",
-          message: "Something went wrong while booking. Please try again.",
-          retryable: true,
-        },
-      };
-      setBookingResult(errorResult);
-      throw errorResult;
-    } finally {
-      setBookingLoading(false);
-    }
+    return await processBookingSubmission();
   };
 
   return (
@@ -599,6 +643,7 @@ export default function ChatWidget() {
               fetchAvailability={fetchAvailability}
               setMode={setMode}
               setEntryPhase={setEntryPhase}
+              processBookingSubmission={processBookingSubmission}
             />
           )}
 
@@ -1036,6 +1081,7 @@ function BookingFlow({
   fetchAvailability,
   setMode,
   setEntryPhase,
+  processBookingSubmission,
 }) {
   // if (!availability) return null;
 
@@ -1157,7 +1203,16 @@ function BookingFlow({
       );
 
     case BOOKING_STEPS.DONE:
-      return <BookingConfirmation booking={booking} onDone={onDone} />;
+      return (
+        <BookingConfirmation
+          booking={booking}
+          onDone={onDone}
+          onRetryBooking={processBookingSubmission}
+          setMode={setMode}
+          setEntryPhase={setEntryPhase}
+          dispatchBooking={dispatchBooking}
+        />
+      );
     default:
       return null;
   }
@@ -1315,7 +1370,14 @@ function DatePicker({ availability, onSelectDate, onSelectBack }) {
   );
 }
 
-function BookingConfirmation({ booking, onDone }) {
+function BookingConfirmation({
+  booking,
+  onDone,
+  onRetryBooking,
+  setMode,
+  setEntryPhase,
+  dispatchBooking,
+}) {
   const date = new Date(booking.date).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -1323,8 +1385,22 @@ function BookingConfirmation({ booking, onDone }) {
     year: "numeric",
   });
 
-  if (!booking.result || booking.result.result !== "success") {
-    return null;
+  if (booking.error) {
+    const errorMessage =
+      booking.error.message ||
+      "Something went wrong during booking. Please try again.";
+    const retryable = booking.error.retryable;
+
+    return (
+      <ErrorMessage
+        message={errorMessage}
+        retryable={retryable}
+        onRetry={onRetryBooking}
+        onCancel={() => {
+          dispatchBooking({ type: ACTION_TYPES.RESET });
+        }}
+      />
+    );
   }
 
   return (
@@ -1373,7 +1449,7 @@ function BookingConfirmation({ booking, onDone }) {
               {booking.time}
             </span>
           </div>
-          {booking.result.data.callLink && (
+          {booking.result?.data?.callLink && (
             <ChatTooltip content={booking.result.data.callLink}>
               <a
                 href={booking.result.data.callLink}
@@ -1389,7 +1465,7 @@ function BookingConfirmation({ booking, onDone }) {
               </a>
             </ChatTooltip>
           )}
-          {booking.result.data.manageLink && (
+          {booking.result?.data?.manageLink && (
             <ChatTooltip content={booking.result.data.manageLink}>
               <a
                 href={booking.result.data.manageLink}
