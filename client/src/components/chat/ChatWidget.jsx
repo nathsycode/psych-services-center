@@ -34,6 +34,7 @@ const DEV = import.meta.env.DEV;
 export const MODES = Object.freeze({
   ENTRY: "entry",
   APPOINTMENT: "appointment",
+  MANAGE: "manage",
   SCHEDULE: "schedule",
   QUESTION: "question",
   CHAT: "chat",
@@ -42,8 +43,9 @@ export const MODES = Object.freeze({
 const SUBMODES = Object.freeze({
   APPOINTMENT: Object.freeze({
     SCHEDULE: "schedule",
-    CANCEL: "cancel",
-    RESCHEDULE: "reschedule",
+    MANAGE: "manage",
+    // CANCEL: "cancel", TODO: Don't forget to fix
+    // RESCHEDULE: "reschedule",
   }),
   QUESTION: Object.freeze({
     SERVICES: "services",
@@ -64,6 +66,9 @@ export const ACTION_TYPES = Object.freeze({
   SUBMIT_DETAILS: "submit",
   BOOKING_SUCCESS: "booking_success",
   BOOKING_FAILURE: "booking_failure",
+  LOOKUP_INITIATE: "initiate_lookup",
+  LOOKUP_SUCCESS: "lookup_success",
+  LOOKUP_FAILURE: "lookup_failure",
   DEV_FORCE_SUBMIT: "dev_force_submit",
 });
 
@@ -82,19 +87,25 @@ const entryActions = [
           "Absolutely -- We offer online consultations and in-person assessment. Please let me know what interests you, as well as your preferred date and time.",
       },
       {
-        sub: SUBMODES.APPOINTMENT.CANCEL,
-        subDesc: "Cancel",
-        userMsg: "I would like to cancel an upcoming appointment",
-        botMsg:
-          "Sorry to hear that. To proceed, kindly confirm your full name and email address.",
+        sub: SUBMODES.APPOINTMENT.MANAGE,
+        subDesc: "Manage",
+        userMsg: "I would like to manage an existing an appointment",
+        botMsg: "Sure! Please provide your appointment code.",
       },
-      {
-        sub: SUBMODES.APPOINTMENT.RESCHEDULE,
-        subDesc: "Reschedule",
-        userMsg: "I would like to reschedule an existing appointment",
-        botMsg:
-          "I'd love to assist -- To proceed, please provide your full name, email address and your preferred date and time for the new schedule.",
-      },
+      // {
+      //   sub: SUBMODES.APPOINTMENT.CANCEL,
+      //   subDesc: "Cancel",
+      //   userMsg: "I would like to cancel an upcoming appointment",
+      //   botMsg:
+      //     "Sorry to hear that. To proceed, kindly confirm your full name and email address.",
+      // },
+      // {
+      //   sub: SUBMODES.APPOINTMENT.RESCHEDULE,
+      //   subDesc: "Reschedule",
+      //   userMsg: "I would like to reschedule an existing appointment",
+      //   botMsg:
+      //     "I'd love to assist -- To proceed, please provide your full name, email address and your preferred date and time for the new schedule.",
+      // },
     ],
   },
   {
@@ -269,6 +280,8 @@ const bookingInitialState = {
   contact: null,
   result: null,
   error: null,
+  lookupResult: null,
+  lookupError: null,
 };
 
 function bookingReducer(state, action) {
@@ -336,6 +349,30 @@ function bookingReducer(state, action) {
         step: BOOKING_STEPS.DONE,
         result: action.result,
         error: action.error,
+      };
+
+    case ACTION_TYPES.LOOKUP_INITIATE:
+      return {
+        ...state,
+        step: BOOKING_STEPS.LOOKUP,
+        lookupResult: null,
+        lookupError: null,
+      };
+
+    case ACTION_TYPES.LOOKUP_SUCCESS:
+      return {
+        ...state,
+        step: BOOKING_STEPS.DONE,
+        lookupResult: action.result,
+        lookupError: null,
+      };
+
+    case ACTION_TYPES.LOOKUP_FAILURE:
+      return {
+        ...state,
+        step: BOOKING_STEPS.DETAILS,
+        lookupResult: null,
+        lookupError: action.error,
       };
 
     case ACTION_TYPES.DEV_FORCE_SUBMIT:
@@ -627,6 +664,8 @@ export default function ChatWidget() {
             <ChatMessages messages={messages} isTyping={isTyping} />
           ) : null}
 
+          {mode === MODES.MANAGE && <div>Managing Appointment</div>}
+
           {mode === MODES.APPOINTMENT && (
             <BookingFlow
               booking={booking}
@@ -644,6 +683,7 @@ export default function ChatWidget() {
               setMode={setMode}
               setEntryPhase={setEntryPhase}
               processBookingSubmission={processBookingSubmission}
+              bookingLoading={bookingLoading}
             />
           )}
 
@@ -677,6 +717,11 @@ export default function ChatWidget() {
                   dispatchBooking({ type: ACTION_TYPES.START_BOOKING });
                   setEntryPhase(ENTRY_PHASES.NONE);
                   setMode(MODES.APPOINTMENT);
+                }
+
+                if (choice === SUBMODES.APPOINTMENT.MANAGE) {
+                  setEntryPhase(ENTRY_PHASES.NONE);
+                  setMode(MODES.MANAGE);
                 }
               }}
             />
@@ -1082,6 +1127,7 @@ function BookingFlow({
   setMode,
   setEntryPhase,
   processBookingSubmission,
+  bookingLoading,
 }) {
   // if (!availability) return null;
 
@@ -1198,7 +1244,7 @@ function BookingFlow({
     case BOOKING_STEPS.SUBMITTING:
       return (
         <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
-          Booking your appointment...
+          <Spinner label="Booking your appointment..." />
         </div>
       );
 
@@ -1211,6 +1257,7 @@ function BookingFlow({
           setMode={setMode}
           setEntryPhase={setEntryPhase}
           dispatchBooking={dispatchBooking}
+          bookingLoading={bookingLoading}
         />
       );
     default:
@@ -1377,6 +1424,7 @@ function BookingConfirmation({
   setMode,
   setEntryPhase,
   dispatchBooking,
+  bookingLoading,
 }) {
   const date = new Date(booking.date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -1398,7 +1446,10 @@ function BookingConfirmation({
         onRetry={onRetryBooking}
         onCancel={() => {
           dispatchBooking({ type: ACTION_TYPES.RESET });
+          setMode(MODES.ENTRY);
+          setEntryPhase(ENTRY_PHASES.ROOT);
         }}
+        isLoading={bookingLoading}
       />
     );
   }
@@ -1525,7 +1576,7 @@ function Loading({ label = "Loading availability...", timeoutMs, onTimeout }) {
   );
 }
 
-function ErrorMessage({ message, retryable, onRetry, onCancel }) {
+function ErrorMessage({ message, retryable, onRetry, onCancel, isLoading }) {
   return (
     <div className="flex flex-col items-center justify-center p-4 text-center flex-1">
       <CircleAlert className="h-8 w-8 mb-2 text-red-500" />
@@ -1534,12 +1585,14 @@ function ErrorMessage({ message, retryable, onRetry, onCancel }) {
         <div className="flex gap-2 mt-4">
           <button
             onClick={onRetry}
-            className="rounded-full bg-red-500 px-4 py-2 text-white text-sm hover:bg-red-600"
+            disabled={isLoading}
+            className={`rounded-full px-4 py-2 text-white text-sm ${isLoading ? "border border-slate-400 hover:bg-slate-100 cursor-not-allowed" : "bg-red-500 hover:bg-red-600"}`}
           >
-            Retry
+            {isLoading ? <Spinner label="Retrying..." /> : "Retry"}
           </button>
           <button
             onClick={onCancel}
+            disabled={isLoading}
             className="rounded-full border border-red-500 px-4 py-2 text-red-500 text-sm hover:bg-red-50"
           >
             Cancel
