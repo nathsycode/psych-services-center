@@ -23,8 +23,7 @@ const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
 const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
-// const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
-const VITE_LOOKUP_URL = import.meta.env.VITE_TEST_LOOKUP_URL;
+const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
 // const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
 
 // HACK: TESTING ONLY
@@ -234,7 +233,7 @@ async function verifyAppointmentCode(appCode) {
       result: "error",
       error: {
         code: err.error?.code || "LOOKUP_UNKNOWN_ERROR",
-        messsage:
+        message:
           err.error?.message ||
           "Unable to verify appointment code. Please try again later.",
         retryable: err.error?.retryable === true,
@@ -301,6 +300,13 @@ const BOOKING_STEPS = Object.freeze({
   SUBMITTING: "submitting",
   DONE: "done",
   LOOKUP: "lookup",
+});
+
+const MANAGE_STEPS = Object.freeze({
+  CODE: "code",
+  LOADING: "loading",
+  DETAILS: "details",
+  ERROR: "error",
 });
 
 const bookingInitialState = {
@@ -464,6 +470,7 @@ export default function ChatWidget() {
 
     getAvailability(booking.service)
       .then((data) => {
+        console.log("setting availability", data);
         setAvailability(data);
       })
       .catch((err) => {
@@ -494,6 +501,14 @@ export default function ChatWidget() {
   useEffect(() => {
     fetchAvailability();
   }, [booking.service]);
+
+  useEffect(() => {
+    if (booking.step !== BOOKING_STEPS.LOOKUP_INITIATE) return;
+
+    console.log("Booking step");
+
+
+  }, [booking.step])
 
   const processBookingSubmission = async () => {
     setBookingLoading(true);
@@ -549,7 +564,7 @@ export default function ChatWidget() {
         error: {
           code: "UNEXPECTED_EXCEPTION",
           message:
-            "A severe network or unexpected error occured. Please check your internet connection and try again.",
+            "A server network or unexpected error occured. Please check your internet connection and try again.",
           retryable: true,
         },
       });
@@ -654,6 +669,18 @@ export default function ChatWidget() {
     return await processBookingSubmission();
   };
 
+  const showChatMessages =
+    mode !== MODES.APPOINTMENT &&
+    mode !== MODES.MANAGE
+    ||
+    (
+      mode === MODES.APPOINTMENT &&
+      (
+        booking.step === BOOKING_STEPS.IDLE ||
+        booking.step === BOOKING_STEPS.SERVICE
+      )
+    );
+
   return (
     <>
       <ChatTooltip content="Chat with AI Support Assistant">
@@ -685,42 +712,24 @@ export default function ChatWidget() {
             <div className="absolute text-center items-center justify-center w-full bg-primary flex flex-col">
               <p>{mode ? mode : ""}</p>
               <p>{booking.step ? booking.step : ""}</p>
+              <p>{ }</p>
               {/* {booking.service && <p>{booking.service}</p>} */}
             </div>
           )}
           {/* NOTE: ChatMessages should show when booking step is not idle */}
 
-          {mode !== MODES.APPOINTMENT ||
-          booking.step === BOOKING_STEPS.IDLE ||
-          booking.step === BOOKING_STEPS.SERVICE ? (
-            <ChatMessages messages={messages} isTyping={isTyping} />
-          ) : null}
+          {showChatMessages && <ChatMessages messages={messages} isTyping={isTyping} />
+          }
 
           {mode === MODES.MANAGE && (
-            <AppointmentCodeForm
-              onSubmit={async (code) => {
-                dispatchBooking({ type: ACTION_TYPES.LOOKUP_INITIATE });
-                const res = await verifyAppointmentCode(code);
-                if (res.result === "success") {
-                  dispatchBooking({
-                    type: ACTION_TYPES.LOOKUP_SUCCESS,
-                    result: res.appointment,
-                  });
-                  // TODO: Transition to display appointment details and options
-                } else {
-                  dispatchBooking({
-                    type: ACTION_TYPES.LOOKUP_FAILURE,
-                    error: res.error,
-                  });
-                }
-              }}
-              onBack={() => {
+            <ManageFlow
+              verifyAppointmentCode={verifyAppointmentCode}
+              onExit={() => {
                 setMode(MODES.ENTRY);
-                setEntryPhase(ENTRY_PHASES.ROOT);
+                setEntryPhase(ENTRY_PHASES.ROOT)
               }}
-              lookupError={booking.lookupError}
-              isLoading={booking.step === BOOKING_STEPS.LOOKUP}
             />
+
           )}
 
           {mode === MODES.APPOINTMENT && (
@@ -791,10 +800,9 @@ export default function ChatWidget() {
                   .subactions
               }
               onSelect={(choice) => {
-                applySubAction(MODES.QUESTION, choice, {
+                applySubAction(MODES.QUESTION, choice,
                   setMessages,
-                  setMode,
-                });
+                );
               }}
             />
           )}
@@ -881,9 +889,8 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${
-            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-          }`}
+          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+            }`}
         >
           {message.content}
         </div>
@@ -1168,6 +1175,8 @@ const getAvailability = async (service) => {
 
   const data = await res.json();
 
+  console.log("get availability", data);
+
   return data.availability;
 };
 
@@ -1187,6 +1196,8 @@ function BookingFlow({
   bookingLoading,
 }) {
   // if (!availability) return null;
+
+  console.log(availability)
 
   const needsAvailability =
     booking.step !== BOOKING_STEPS.IDLE &&
@@ -1211,7 +1222,7 @@ function BookingFlow({
       return (
         <Loading
           label="Loading availability..."
-          timeoutMs={1000}
+          timeoutMs={8000}
           onTimeout={() => {
             console.log("timed out");
             setAvailabilityTimedOut(true);
@@ -1601,6 +1612,142 @@ function BookingConfirmation({
   );
 }
 
+function ManageFlow({ verifyAppointmentCode, onExit }) {
+  const [step, setStep] = useState(MANAGE_STEPS.CODE);
+  const [appointment, setAppointment] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleSubmitCode = async (code) => {
+    setStep(MANAGE_STEPS.LOADING);
+    setError(null);
+
+    const res = await verifyAppointmentCode(code);
+
+    console.log(res);
+
+    if (res.result === 'success') {
+      setAppointment(res.data);
+      setStep(MANAGE_STEPS.DETAILS);
+    } else {
+      setError(res.error);
+      setStep(MANAGE_STEPS.ERROR);
+    }
+  };
+
+  switch (step) {
+    case MANAGE_STEPS.CODE:
+    case MANAGE_STEPS.ERROR:
+      return (
+        <AppointmentCodeForm
+          onSubmit={handleSubmitCode}
+          onBack={onExit}
+          lookupError={error}
+          isLoading={step === MANAGE_STEPS.LOADING}
+        />
+      )
+    case MANAGE_STEPS.LOADING:
+      return <Spinner label="Verifying appointment..." />
+
+    case MANAGE_STEPS.DETAILS:
+      return (
+        <ManageAppointmentDetails
+          appointment={appointment}
+          onBack={onExit}
+        />
+      )
+
+
+    default:
+      break;
+  }
+
+  return (
+    <div>Manage Flow</div>
+  )
+}
+
+function ManageAppointmentDetails({ appointment, onBack }) {
+
+  return (
+
+    <div className="p-4 gap-2 flex flex-col">
+      <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md mx-4 mt-4">
+        <h1 className="flex flex-row gap-2 group items-center justify-center">
+          <Brain className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-lg">MindCare Center</span>
+        </h1>
+        <h3 className="text-center text-sm">
+          {appointment.service}
+        </h3>
+        <div className="flex flex-col mt-2">
+          <div className="flex flex-row gap-2 items-center group">
+            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <User className="h-4 w-4" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+              {appointment.name}
+            </span>
+          </div>
+          <div className="flex flex-row gap-2 items-center group">
+            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <Calendar className="h-4 w-4" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+              {appointment.date}
+            </span>
+          </div>
+          <div className="flex flex-row gap-2 items-center group">
+            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+              <Clock className="h-4 w-4" />
+            </div>
+            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+              {appointment.time}
+            </span>
+          </div>
+          {appointment.callLink && (
+            <ChatTooltip content={appointment.callLink}>
+              <a
+                href={appointment.callLink}
+                target="_blank"
+                className="btn-primary flex flex-row gap-2 items-center group"
+              >
+                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                  <Video className="h-4 w-4" />
+                </div>
+                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                  Link to Call
+                </span>
+              </a>
+            </ChatTooltip>
+          )}
+          {appointment.manageLink && (
+            <ChatTooltip content={appointment.manageLink}>
+              <a
+                href={appointment.manageLink}
+                target="_blank"
+                className="btn-primary flex flex-row gap-2 items-center group"
+              >
+                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                  <ChartNoAxesGantt className="h-4 w-4" />
+                </div>
+                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                  Manage Booking
+                </span>
+              </a>
+            </ChatTooltip>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={onBack}
+        className="text-xs text-slate-600 underline pt-2 hover:text-primary px-2 mx-auto"
+      >
+        Back to Chat
+      </button>
+    </div>
+  )
+}
+
 function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
   const [appCode, setAppCode] = useState("");
   const canSubmit = appCode.trim();
@@ -1627,7 +1774,7 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
         >
           <Form.Field>
             <div>
-              <Form.Label>Appointment Code*</Form.Label>
+              <Form.Label className="text-[15px] font-medium leading-[35px]">Appointment Code*</Form.Label>
               {lookupError && (
                 <Form.Message
                   id="code-error"
@@ -1639,7 +1786,7 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
             </div>
             <Form.Control asChild>
               <input
-                className="box-border w-full inline-flex h-[35px]"
+                className="box-border inline-flex h-[35px] w-full appearance-none items-center justify-center rounded-md px-2.5 text-[15px] leading-none text-black border border-slate-400 focus:outline-none focus:border-primary focus:border-2 transition-colors duration-300"
                 required
                 type="text"
                 name="appCode"
@@ -1650,22 +1797,22 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
               />
             </Form.Control>
           </Form.Field>
-          <div>
+          <div className="flex flex-row items-center justify-between gap-3 mt-3">
             <ChatTooltip content="Go Back to Main Menu">
               <button
                 type="button"
-                className="border border-slate-500 px-3 py-2"
+                className="border border-slate-500 px-3 py-2 rounded-full group flex flex-row gap-2 duration-300 transition-all ease-in-out hover:bg-primary/5 hover:border-primary"
                 onClick={() => onBack()}
                 aria-label="Go Back"
                 disabled={isLoading}
               >
-                <ArrowLeft className="h-5 w-5" />
+                <ArrowLeft className="h-5 w-5 text-slate-500 transition-all duration-300 ease-out group-hover:-translate-x-1 group-hover:text-primary" />
               </button>
             </ChatTooltip>
             <Form.Submit asChild>
               <button
                 disabled={!canSubmit || isLoading}
-                className="flex-1 rounded-full px-3 py-2 bg-primary text-white"
+                className="flex-1 rounded-full px-3 py-2 bg-primary text-white transition-colors duration-300 ease-in-out hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? <Spinner label="Verifying..." /> : "Verify Code"}
               </button>
