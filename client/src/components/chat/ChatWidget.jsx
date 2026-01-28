@@ -23,6 +23,8 @@ const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
 const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
+// const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
+const VITE_LOOKUP_URL = import.meta.env.VITE_TEST_LOOKUP_URL;
 // const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
 
 // HACK: TESTING ONLY
@@ -219,6 +221,34 @@ async function bookAppointment(payload) {
   return data;
 }
 
+async function verifyAppointmentCode(appCode) {
+  const res = await fetch(VITE_LOOKUP_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ appCode }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    return {
+      result: "error",
+      error: {
+        code: err.error?.code || "LOOKUP_UNKNOWN_ERROR",
+        messsage:
+          err.error?.message ||
+          "Unable to verify appointment code. Please try again later.",
+        retryable: err.error?.retryable === true,
+      },
+    };
+  }
+
+  const data = await res.json();
+
+  console.log(data);
+
+  return data;
+}
+
 function applySubAction(entry, choice, setMessages) {
   const subAction = entry.subactions.find((sub) => sub.sub === choice);
 
@@ -270,6 +300,7 @@ const BOOKING_STEPS = Object.freeze({
   DETAILS: "details",
   SUBMITTING: "submitting",
   DONE: "done",
+  LOOKUP: "lookup",
 });
 
 const bookingInitialState = {
@@ -653,6 +684,7 @@ export default function ChatWidget() {
           {showDebug && (
             <div className="absolute text-center items-center justify-center w-full bg-primary flex flex-col">
               <p>{mode ? mode : ""}</p>
+              <p>{booking.step ? booking.step : ""}</p>
               {/* {booking.service && <p>{booking.service}</p>} */}
             </div>
           )}
@@ -664,7 +696,32 @@ export default function ChatWidget() {
             <ChatMessages messages={messages} isTyping={isTyping} />
           ) : null}
 
-          {mode === MODES.MANAGE && <div>Managing Appointment</div>}
+          {mode === MODES.MANAGE && (
+            <AppointmentCodeForm
+              onSubmit={async (code) => {
+                dispatchBooking({ type: ACTION_TYPES.LOOKUP_INITIATE });
+                const res = await verifyAppointmentCode(code);
+                if (res.result === "success") {
+                  dispatchBooking({
+                    type: ACTION_TYPES.LOOKUP_SUCCESS,
+                    result: res.appointment,
+                  });
+                  // TODO: Transition to display appointment details and options
+                } else {
+                  dispatchBooking({
+                    type: ACTION_TYPES.LOOKUP_FAILURE,
+                    error: res.error,
+                  });
+                }
+              }}
+              onBack={() => {
+                setMode(MODES.ENTRY);
+                setEntryPhase(ENTRY_PHASES.ROOT);
+              }}
+              lookupError={booking.lookupError}
+              isLoading={booking.step === BOOKING_STEPS.LOOKUP}
+            />
+          )}
 
           {mode === MODES.APPOINTMENT && (
             <BookingFlow
@@ -1540,6 +1597,82 @@ function BookingConfirmation({
       >
         Back to Chat
       </button>
+    </div>
+  );
+}
+
+function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
+  const [appCode, setAppCode] = useState("");
+  const canSubmit = appCode.trim();
+
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-start p-4">
+      <div className="w-full flex flex-col px-4 py-4 border-b border-slate-200 mb-4">
+        <p className="font-semibold text-lg text-slate-900">
+          Manage Appointment
+        </p>
+        <p className="text-sm text-slate-600 mt-1">
+          Please enter your unique appointment code to view or modify your
+          booking.
+        </p>
+      </div>
+      <div>
+        <Form.Root
+          className="w-full"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!canSubmit || isLoading) return;
+            onSubmit(appCode.trim());
+          }}
+        >
+          <Form.Field>
+            <div>
+              <Form.Label>Appointment Code*</Form.Label>
+              {lookupError && (
+                <Form.Message
+                  id="code-error"
+                  className="text-[13px] text-red-500 opacity-80"
+                >
+                  {lookupError.message}
+                </Form.Message>
+              )}
+            </div>
+            <Form.Control asChild>
+              <input
+                className="box-border w-full inline-flex h-[35px]"
+                required
+                type="text"
+                name="appCode"
+                placeholder="Your appointment code ..."
+                value={appCode}
+                aria-describedby="code-error"
+                onChange={(e) => setAppCode(e.target.value)}
+              />
+            </Form.Control>
+          </Form.Field>
+          <div>
+            <ChatTooltip content="Go Back to Main Menu">
+              <button
+                type="button"
+                className="border border-slate-500 px-3 py-2"
+                onClick={() => onBack()}
+                aria-label="Go Back"
+                disabled={isLoading}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            </ChatTooltip>
+            <Form.Submit asChild>
+              <button
+                disabled={!canSubmit || isLoading}
+                className="flex-1 rounded-full px-3 py-2 bg-primary text-white"
+              >
+                {isLoading ? <Spinner label="Verifying..." /> : "Verify Code"}
+              </button>
+            </Form.Submit>
+          </div>
+        </Form.Root>
+      </div>
     </div>
   );
 }
