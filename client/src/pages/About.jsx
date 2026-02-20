@@ -1,4 +1,3 @@
-import useIO from "../hooks/useIO";
 import TeamIntro from '../components/about/TeamIntro';
 import TeamMembers from '../components/about/TeamMembers';
 

@@ -1,11 +1,7 @@
 import { useEffect } from "react";
-import { MODES, ACTION_TYPES } from "../components/chat/ChatWidget";
+import { MODES, ACTION_TYPES } from "../components/chat/chatConstants";
 
-export default function useDevShortcuts({
-  setShowDebug,
-  dispatchBooking,
-  setMode,
-}) {
+export default function useDevShortcuts({ dispatchBooking, setMode }) {
   useEffect(() => {
     if (!import.meta.env.DEV) return;
 
@@ -24,5 +20,5 @@ export default function useDevShortcuts({
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [dispatchBooking, setMode]);
 }

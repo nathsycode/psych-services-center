@@ -4,14 +4,6 @@ import { Brain, Mail, Phone, MapPin, Facebook, Twitter, Instagram } from 'lucide
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
-  const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: 'Booking', path: '/booking' },
-    { name: 'About', path: '/about' },
-    { name: 'Articles', path: '/articles' },
-    { name: 'Contact', path: '/contact' },
-  ];
-
   const services = [
     { name: 'Online Consultation', path: '/booking#consultation' },
     { name: 'Psychological Assessment', path: '/booking#assessment' },

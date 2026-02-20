@@ -10,7 +10,7 @@ export default function ServicesSection() {
   const [hoveredCard, setHoveredCard] = useState(null);
   const { ref, visibleItems } = useIO();
 
-  const handleMouseMove = (e, cardId) => {
+  const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     setCursorPosition({
       x: e.clientX - rect.left,

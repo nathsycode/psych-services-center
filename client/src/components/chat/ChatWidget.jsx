@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, useReducer, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useReducer,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   Loader2,
   MessageCircle,
@@ -16,8 +23,16 @@ import {
   ChartNoAxesGantt,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
+import {
+  APP_MODES,
+  getInitialMode,
+  isPortfolioMode,
+  setAppMode,
+} from "../../lib/appMode.js";
+import { ACTION_TYPES, MODES } from "./chatConstants.js";
 import { Tooltip, Form } from "radix-ui";
 import useDevShortcuts from "../../hooks/useDevShortcuts";
+import MOCKS from "../../lib/mocks.js";
 
 const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
@@ -32,15 +47,6 @@ const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
 //   "http://localhost:5678/webhook-test/calendar/availability";
 const DEV = import.meta.env.DEV;
 
-export const MODES = Object.freeze({
-  ENTRY: "entry",
-  APPOINTMENT: "appointment",
-  MANAGE: "manage",
-  SCHEDULE: "schedule",
-  QUESTION: "question",
-  CHAT: "chat",
-});
-
 const SUBMODES = Object.freeze({
   APPOINTMENT: Object.freeze({
     SCHEDULE: "schedule",
@@ -54,23 +60,6 @@ const SUBMODES = Object.freeze({
     PRICING: "pricing",
     OTHERS: "others",
   }),
-});
-
-export const ACTION_TYPES = Object.freeze({
-  START_BOOKING: "start",
-  SELECT_SERVICE: "service",
-  SELECT_DATE: "date",
-  SELECT_TIME: "time",
-  BACK_TO_DATE: "back_date",
-  BACK_TO_TIME: "back_time",
-  RESET: "reset",
-  SUBMIT_DETAILS: "submit",
-  BOOKING_SUCCESS: "booking_success",
-  BOOKING_FAILURE: "booking_failure",
-  LOOKUP_INITIATE: "initiate_lookup",
-  LOOKUP_SUCCESS: "lookup_success",
-  LOOKUP_FAILURE: "lookup_failure",
-  DEV_FORCE_SUBMIT: "dev_force_submit",
 });
 
 const entryActions = [
@@ -220,7 +209,7 @@ async function bookAppointment(payload) {
   return data;
 }
 
-async function verifyAppointmentCode(appCode) {
+async function lookupAppointmentCode(appCode) {
   const res = await fetch(VITE_LOOKUP_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -241,14 +230,12 @@ async function verifyAppointmentCode(appCode) {
     };
   }
 
-  const data = await res.json();
-
-  console.log(data);
-
-  return data;
+  return await res.json();
 }
 
 function applySubAction(entry, choice, setMessages) {
+  if (!entry) return;
+
   const subAction = entry.subactions.find((sub) => sub.sub === choice);
 
   if (!subAction) return;
@@ -451,18 +438,39 @@ export default function ChatWidget() {
 
   const [hasGreeted, setHasGreeted] = useState(stored?.hasGreeted || false);
   const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingResult, setBookingResult] = useState(null);
   const [availabilityTimedOut, setAvailabilityTimedOut] = useState(false);
+
+  const [appMode, setAppModeState] = useState(getInitialMode());
 
   const [booking, dispatchBooking] = useReducer(
     bookingReducer,
     bookingInitialState,
   );
 
+  const isPortfolio = isPortfolioMode(appMode);
+
+  const verifyAppointmentCode = async (appCode) => {
+    if (isPortfolio) {
+      const normalized = appCode.trim().toUpperCase();
+      return (
+        MOCKS.LOOKUP_BY_CODE[normalized] ?? {
+          ...MOCKS.LOOKUP_NOT_FOUND,
+        }
+      );
+    }
+
+    return await lookupAppointmentCode(appCode);
+  };
+
   useDevShortcuts({ setShowDebug, dispatchBooking, setMode });
 
-  const fetchAvailability = () => {
+  const fetchAvailability = useCallback(() => {
     if (!booking.service) return;
+
+    if (isPortfolio) {
+      setAvailability(MOCKS.AVAILABILITY);
+      return;
+    }
 
     setLoadingAvailability(true);
     setAvailabilityError(null);
@@ -470,7 +478,7 @@ export default function ChatWidget() {
 
     getAvailability(booking.service)
       .then((data) => {
-        console.log("setting availability", data);
+        if (DEV) console.log("setting availability", data);
         setAvailability(data);
       })
       .catch((err) => {
@@ -480,7 +488,7 @@ export default function ChatWidget() {
         );
       })
       .finally(() => setLoadingAvailability(false));
-  };
+  }, [booking.service, isPortfolio]);
 
   useEffect(() => {
     // Local Storage
@@ -500,17 +508,21 @@ export default function ChatWidget() {
   // NOTE: Fetch Availability
   useEffect(() => {
     fetchAvailability();
-  }, [booking.service]);
+  }, [fetchAvailability]);
 
-  useEffect(() => {
-    if (booking.step !== BOOKING_STEPS.LOOKUP_INITIATE) return;
+  const processBookingSubmission = useCallback(async () => {
+    if (isPortfolio) {
+      dispatchBooking({
+        type: ACTION_TYPES.BOOKING_SUCCESS,
+        result: MOCKS.BOOKING_RESULT,
+      });
+      setMessages((m) => [
+        ...m,
+        inputChat("assistant", "✅ (Demo) Appointment Booked."),
+      ]);
+      return MOCKS.BOOKING_RESULT;
+    }
 
-    console.log("Booking step");
-
-
-  }, [booking.step])
-
-  const processBookingSubmission = async () => {
     setBookingLoading(true);
 
     try {
@@ -579,13 +591,13 @@ export default function ChatWidget() {
     } finally {
       setBookingLoading(false);
     }
-  };
+  }, [isPortfolio, booking, dispatchBooking]);
 
   useEffect(() => {
     if (booking.step !== BOOKING_STEPS.SUBMITTING) return;
 
     processBookingSubmission();
-  }, [booking.step]);
+  }, [booking.step, processBookingSubmission]);
 
   const initialGreet = () => {
     if (hasGreeted) return;
@@ -615,17 +627,21 @@ export default function ChatWidget() {
     });
 
     try {
-      const data = await sendChatMessage({
-        sessionId,
-        message: content,
-        messages: nextMessages.map(({ role, content }) => ({
-          role,
-          content,
-        })),
-        page: window.location.pathname,
-      });
+      if (!isPortfolio) {
+        const data = await sendChatMessage({
+          sessionId,
+          message: content,
+          messages: nextMessages.map(({ role, content }) => ({
+            role,
+            content,
+          })),
+          page: window.location.pathname,
+        });
 
-      setMessages((m) => [...m, inputChat("assistant", data.reply)]);
+        setMessages((m) => [...m, inputChat("assistant", data.reply)]);
+      } else {
+        setMessages((m) => [...m, inputChat("assistant", MOCKS.CHAT_REPLY)]);
+      }
     } catch (err) {
       console.error("Chat Error:", err);
     } finally {
@@ -665,21 +681,11 @@ export default function ChatWidget() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const confirmBooking = async () => {
-    return await processBookingSubmission();
-  };
-
   const showChatMessages =
-    mode !== MODES.APPOINTMENT &&
-    mode !== MODES.MANAGE
-    ||
-    (
-      mode === MODES.APPOINTMENT &&
-      (
-        booking.step === BOOKING_STEPS.IDLE ||
-        booking.step === BOOKING_STEPS.SERVICE
-      )
-    );
+    (mode !== MODES.APPOINTMENT && mode !== MODES.MANAGE) ||
+    (mode === MODES.APPOINTMENT &&
+      (booking.step === BOOKING_STEPS.IDLE ||
+        booking.step === BOOKING_STEPS.SERVICE));
 
   return (
     <>
@@ -708,28 +714,50 @@ export default function ChatWidget() {
         >
           <ChatHeader onClose={() => setIsOpen(false)} />
 
+          {import.meta.env.DEV && (
+            <button
+              className="fixed bottom-12 px-2 py-2 border border-red-400 text-slate-700 bg-white text-sm rounded-full"
+              onClick={() => {
+                const next =
+                  appMode === APP_MODES.DEMO
+                    ? APP_MODES.PORTFOLIO
+                    : APP_MODES.DEMO;
+                setAppMode(next);
+                setAppModeState(next);
+              }}
+            >
+              Mode: {appMode}
+            </button>
+          )}
+
+          {isPortfolio && (
+            <p className="text-slate-400 text-xs text-center -pb-1.5">
+              Portfolio mode: live API disabled
+            </p>
+          )}
+
           {showDebug && (
             <div className="absolute text-center items-center justify-center w-full bg-primary flex flex-col">
               <p>{mode ? mode : ""}</p>
               <p>{booking.step ? booking.step : ""}</p>
-              <p>{ }</p>
+              <p>{}</p>
               {/* {booking.service && <p>{booking.service}</p>} */}
             </div>
           )}
           {/* NOTE: ChatMessages should show when booking step is not idle */}
 
-          {showChatMessages && <ChatMessages messages={messages} isTyping={isTyping} />
-          }
+          {showChatMessages && (
+            <ChatMessages messages={messages} isTyping={isTyping} />
+          )}
 
           {mode === MODES.MANAGE && (
             <ManageFlow
               verifyAppointmentCode={verifyAppointmentCode}
               onExit={() => {
                 setMode(MODES.ENTRY);
-                setEntryPhase(ENTRY_PHASES.ROOT)
+                setEntryPhase(ENTRY_PHASES.ROOT);
               }}
             />
-
           )}
 
           {mode === MODES.APPOINTMENT && (
@@ -800,9 +828,12 @@ export default function ChatWidget() {
                   .subactions
               }
               onSelect={(choice) => {
-                applySubAction(MODES.QUESTION, choice,
-                  setMessages,
+                const entry = entryActions.find(
+                  (act) => act.action === MODES.QUESTION,
                 );
+                applySubAction(entry, choice, setMessages);
+                setMode(MODES.CHAT);
+                setEntryPhase(ENTRY_PHASES.NONE);
               }}
             />
           )}
@@ -810,7 +841,7 @@ export default function ChatWidget() {
           {entryPhase !== ENTRY_PHASES.ROOT && !booking.service && (
             <ResetActions
               mode={mode}
-              onSelect={(choice) => {
+              onSelect={() => {
                 setMode(MODES.ENTRY);
                 setEntryPhase(ENTRY_PHASES.ROOT);
               }}
@@ -889,8 +920,9 @@ function MessageBubble({ message }) {
         </div>
 
         <div
-          className={`rounded-lg px-3 py-2 text-sm ${isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-            }`}
+          className={`rounded-lg px-3 py-2 text-sm ${
+            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+          }`}
         >
           {message.content}
         </div>
@@ -1197,7 +1229,7 @@ function BookingFlow({
 }) {
   // if (!availability) return null;
 
-  console.log(availability)
+  console.log(availability);
 
   const needsAvailability =
     booking.step !== BOOKING_STEPS.IDLE &&
@@ -1340,6 +1372,15 @@ function TimePicker({
   onSelectBack,
 }) {
   const day = availability.find((d) => d.date === selectedDate);
+
+  if (!day) {
+    return (
+      <Empty
+        message="Selected date is no longer available."
+        onRetry={onSelectBack}
+      />
+    );
+  }
   const grouped = groupByAbbreviation(day.slots);
 
   return (
@@ -1383,12 +1424,15 @@ function TimePicker({
 }
 
 function DatePicker({ availability, onSelectDate, onSelectBack }) {
-  if (!availability) return <div>No Availability Loaded</div>;
-
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(0);
+  if (!availability) return <div>No Availability Loaded</div>;
 
   const availableDays = availability.filter((d) => d.slots.length > 0);
+
+  if (availableDays.length === 0) {
+    return <Empty message="No available times ..." onRetry={onSelectBack} />;
+  }
 
   const start = page * PAGE_SIZE;
   const end = start + PAGE_SIZE;
@@ -1573,6 +1617,7 @@ function BookingConfirmation({
               <a
                 href={booking.result.data.callLink}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="btn-primary flex flex-row gap-2 items-center group"
               >
                 <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
@@ -1589,6 +1634,7 @@ function BookingConfirmation({
               <a
                 href={booking.result.data.manageLink}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="btn-primary flex flex-row gap-2 items-center group"
               >
                 <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
@@ -1625,7 +1671,7 @@ function ManageFlow({ verifyAppointmentCode, onExit }) {
 
     console.log(res);
 
-    if (res.result === 'success') {
+    if (res.result === "success") {
       setAppointment(res.data);
       setStep(MANAGE_STEPS.DETAILS);
     } else {
@@ -1642,43 +1688,32 @@ function ManageFlow({ verifyAppointmentCode, onExit }) {
           onSubmit={handleSubmitCode}
           onBack={onExit}
           lookupError={error}
-          isLoading={step === MANAGE_STEPS.LOADING}
         />
-      )
+      );
     case MANAGE_STEPS.LOADING:
-      return <Spinner label="Verifying appointment..." />
+      return <Spinner label="Verifying appointment..." />;
 
     case MANAGE_STEPS.DETAILS:
       return (
-        <ManageAppointmentDetails
-          appointment={appointment}
-          onBack={onExit}
-        />
-      )
-
+        <ManageAppointmentDetails appointment={appointment} onBack={onExit} />
+      );
 
     default:
       break;
   }
 
-  return (
-    <div>Manage Flow</div>
-  )
+  return <div>Manage Flow</div>;
 }
 
 function ManageAppointmentDetails({ appointment, onBack }) {
-
   return (
-
     <div className="p-4 gap-2 flex flex-col">
       <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md mx-4 mt-4">
         <h1 className="flex flex-row gap-2 group items-center justify-center">
           <Brain className="h-4 w-4 text-primary" />
           <span className="font-semibold text-lg">MindCare Center</span>
         </h1>
-        <h3 className="text-center text-sm">
-          {appointment.service}
-        </h3>
+        <h3 className="text-center text-sm">{appointment.service}</h3>
         <div className="flex flex-col mt-2">
           <div className="flex flex-row gap-2 items-center group">
             <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
@@ -1745,10 +1780,10 @@ function ManageAppointmentDetails({ appointment, onBack }) {
         Back to Chat
       </button>
     </div>
-  )
+  );
 }
 
-function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
+function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
   const [appCode, setAppCode] = useState("");
   const canSubmit = appCode.trim();
 
@@ -1768,13 +1803,15 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
           className="w-full"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!canSubmit || isLoading) return;
+            if (!canSubmit) return;
             onSubmit(appCode.trim());
           }}
         >
           <Form.Field>
             <div>
-              <Form.Label className="text-[15px] font-medium leading-[35px]">Appointment Code*</Form.Label>
+              <Form.Label className="text-[15px] font-medium leading-[35px]">
+                Appointment Code*
+              </Form.Label>
               {lookupError && (
                 <Form.Message
                   id="code-error"
@@ -1804,17 +1841,16 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError, isLoading }) {
                 className="border border-slate-500 px-3 py-2 rounded-full group flex flex-row gap-2 duration-300 transition-all ease-in-out hover:bg-primary/5 hover:border-primary"
                 onClick={() => onBack()}
                 aria-label="Go Back"
-                disabled={isLoading}
               >
                 <ArrowLeft className="h-5 w-5 text-slate-500 transition-all duration-300 ease-out group-hover:-translate-x-1 group-hover:text-primary" />
               </button>
             </ChatTooltip>
             <Form.Submit asChild>
               <button
-                disabled={!canSubmit || isLoading}
+                disabled={!canSubmit}
                 className="flex-1 rounded-full px-3 py-2 bg-primary text-white transition-colors duration-300 ease-in-out hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? <Spinner label="Verifying..." /> : "Verify Code"}
+                Verify Code
               </button>
             </Form.Submit>
           </div>
