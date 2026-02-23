@@ -7,6 +7,7 @@ const MOCKS = {
   BOOKING_RESULT: {
     result: "success",
     data: {
+      appointmentId: "abc123",
       callLink: "https://mindcare.ph/appointment/success-sample",
       manageLink: "https://mindcare.ph/appointment/manage-sample",
     },
@@ -36,6 +37,54 @@ const MOCKS = {
     },
   },
   LOOKUP_NOT_FOUND: {
+    result: "error",
+    error: {
+      code: "LOOKUP_NOT_FOUND",
+      message: "No booking found for that appointment code.",
+      retryable: false,
+    },
+  },
+  MANAGE_CANCEL_BY_CODE: {
+    DEMO123: {
+      result: "success",
+      data: {
+        code: "DEMO123",
+        status: "cancelled",
+        cancelledAt: "2026-02-20T10:00:00.00Z",
+      },
+    },
+    ASSESS456: {
+      result: "error",
+      error: {
+        code: "CANCEL_NOT_ALLOWED",
+        message: "This appointment can no longer be cancelled.",
+        retryable: false,
+      },
+    },
+  },
+  MANAGE_RESCHEDULE_BY_CODE: {
+    DEMO123: {
+      result: "success",
+      data: {
+        code: "DEMO123",
+        service: "Online Mental Health Consultation",
+        name: "Demo User",
+        date: "2026-03-25",
+        time: "10:00 AM",
+        callLink: "https://meet.google.com/demo-call",
+        manageLink: "https://mindcare.ph/manage/demo123",
+      },
+    },
+    ASSESS456: {
+      result: "error",
+      error: {
+        code: "RESCHEDULE_WINDOW_EXPIRED",
+        message: "Rescheduling window has expired.",
+        retryable: false,
+      },
+    },
+  },
+  MANAGE_NOT_FOUND: {
     result: "error",
     error: {
       code: "LOOKUP_NOT_FOUND",

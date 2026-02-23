@@ -21,6 +21,9 @@ import {
   Brain,
   User,
   ChartNoAxesGantt,
+  IdCard,
+  Copy,
+  Check,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import {
@@ -37,14 +40,13 @@ import MOCKS from "../../lib/mocks.js";
 const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
   .VITE_CALENDAR_AVAILABILITY_URL;
+// const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
+// .VITE_TEST_CALENDAR_AVAILABILITY_URL;
 const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
-const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
-// const VITE_BOOKING_URL = import.meta.env.VITE_TEST_BOOKING_URL;
-
-// HACK: TESTING ONLY
-
-// const VITE_CALENDAR_AVAILABILITY_URL =
-//   "http://localhost:5678/webhook-test/calendar/availability";
+// const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
+const VITE_LOOKUP_URL = import.meta.env.VITE_TEST_LOOKUP_URL;
+const VITE_MANAGE_CANCEL_URL = import.meta.env.VITE_MANAGE_CANCEL_URL;
+const VITE_MANAGE_RESCHEDULE_URL = import.meta.env.VITE_MANAGE_RESCHEDULE_URL;
 const DEV = import.meta.env.DEV;
 
 const SUBMODES = Object.freeze({
@@ -183,6 +185,17 @@ function applyEntryAction(choice, setMessages) {
   );
 }
 
+function normalizeApiError(errorData, fallbackCode, fallbackMessage) {
+  return {
+    result: "error",
+    error: {
+      code: errorData?.error?.code || fallbackCode,
+      message: errorData?.error?.message || fallbackMessage,
+      retryable: errorData?.error?.retryable === true,
+    },
+  };
+}
+
 async function bookAppointment(payload) {
   const res = await fetch(VITE_BOOKING_URL, {
     method: "POST",
@@ -207,6 +220,44 @@ async function bookAppointment(payload) {
   const data = await res.json();
 
   return data;
+}
+
+async function cancelAppointment(payload) {
+  const res = await fetch(VITE_MANAGE_CANCEL_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    return normalizeApiError(
+      errorData,
+      "CANCEL_UNKNOWN_ERROR",
+      "Unable to cancel appointment. Please try again later.",
+    );
+  }
+
+  return await res.json();
+}
+
+async function rescheduleAppointment(payload) {
+  const res = await fetch(VITE_MANAGE_RESCHEDULE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    return normalizeApiError(
+      errorData,
+      "RESCHEDULE_UNKNOWN_ERROR",
+      "Unable to reschedule appointment. Please try again later.",
+    );
+  }
+
+  return await res.json();
 }
 
 async function lookupAppointmentCode(appCode) {
@@ -265,14 +316,39 @@ function groupByYearMonth(days) {
   return grouped;
 }
 
+function normalizeTimeForDisplay(slot) {
+  if (typeof slot !== "string") return "";
+
+  const hhmm = slot.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+
+  if (hhmm) {
+    const h24 = Number(hhmm[1]);
+    const mm = hhmm[2];
+    const period = h24 >= 12 ? "PM" : "AM";
+    const h12 = ((h24 + 11) % 12) + 1;
+    return `${String(h12).padStart(2, "0")}:${mm} ${period}`;
+  }
+
+  const ampm = slot.match(/^(\d{1,2}):([0-5]\d)\s*([aApP][mM])$/);
+  if (ampm) {
+    const hh = Number(ampm[1]);
+    const mm = ampm[2];
+    const period = ampm[3].toUpperCase();
+    return `${String(hh).padStart(2, "0")}:${mm} ${period}`;
+  }
+
+  return slot;
+}
+
 function groupByAbbreviation(slots) {
   const grouped = {};
 
-  slots.forEach((slot) => {
-    const abb = slot.slice(6, 8);
+  slots.forEach((raw) => {
+    const display = normalizeTimeForDisplay(raw);
+    const abb = display.endsWith("PM") ? "PM" : "AM";
 
     grouped[abb] ??= [];
-    grouped[abb].push(slot);
+    grouped[abb].push({ raw, display });
   });
 
   return grouped;
@@ -289,11 +365,25 @@ const BOOKING_STEPS = Object.freeze({
   LOOKUP: "lookup",
 });
 
+const MANAGE_ACTIONS = Object.freeze({
+  LOOKUP: "lookup",
+  CANCEL: "cancel",
+  RESCHEDULE: "reschedule",
+});
 const MANAGE_STEPS = Object.freeze({
   CODE: "code",
   LOADING: "loading",
   DETAILS: "details",
   ERROR: "error",
+
+  CONFIRM_CANCEL: "confirm_cancel",
+  CANCEL_SUBMITTING: "cancel_submitting",
+  CANCEL_RESULT: "cancel_result",
+
+  RESCHEDULE_DATE: "reschedule_date",
+  RESCHEDULE_TIME: "reschedule_time",
+  RESCHEDULE_SUBMITTING: "reschedule_submitting",
+  RESCHEDULE_RESULT: "reschedule_result",
 });
 
 const bookingInitialState = {
@@ -453,13 +543,58 @@ export default function ChatWidget() {
     if (isPortfolio) {
       const normalized = appCode.trim().toUpperCase();
       return (
-        MOCKS.LOOKUP_BY_CODE[normalized] ?? {
+        MOCKS.LOOKUP_BY_CODE?.[normalized] ?? {
           ...MOCKS.LOOKUP_NOT_FOUND,
         }
       );
     }
 
     return await lookupAppointmentCode(appCode);
+  };
+
+  const cancelAppointmentByCode = async (appCode) => {
+    if (isPortfolio) {
+      const normalized = appCode.trim().toUpperCase();
+      return (
+        MOCKS.MANAGE_CANCEL_BY_CODE?.[normalized] ?? {
+          ...MOCKS.MANAGE_NOT_FOUND,
+        }
+      );
+    }
+
+    return await cancelAppointment({
+      appCode,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+  };
+
+  const rescheduleAppointmentByCode = async ({ appCode, date, time }) => {
+    if (isPortfolio) {
+      const normalized = appCode.trim().toUpperCase();
+      const mock = MOCKS.MANAGE_RESCHEDULE_BY_CODE?.[normalized];
+
+      if (!mock) return { ...MOCKS.MANAGE_NOT_FOUND };
+
+      if (mock.result === "success") {
+        return {
+          ...mock,
+          data: {
+            ...mock.data,
+            date,
+            time,
+          },
+        };
+      }
+
+      return mock;
+    }
+
+    return await rescheduleAppointment({
+      appCode,
+      date,
+      time,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
   };
 
   useDevShortcuts({ setShowDebug, dispatchBooking, setMode });
@@ -502,7 +637,7 @@ export default function ChatWidget() {
 
   useEffect(() => {
     // Debugging
-    console.log("BOOKING STATE", booking);
+    if (DEV) console.log("BOOKING STATE", booking);
   }, [booking]);
 
   // NOTE: Fetch Availability
@@ -712,7 +847,10 @@ export default function ChatWidget() {
           aria-modal="true"
           className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[360px] flex-col rounded-xl bg-white shadow-2xl"
         >
-          <ChatHeader onClose={() => setIsOpen(false)} />
+          <ChatHeader
+            onClose={() => setIsOpen(false)}
+            isPortfolio={isPortfolio}
+          />
 
           {import.meta.env.DEV && (
             <button
@@ -728,12 +866,6 @@ export default function ChatWidget() {
             >
               Mode: {appMode}
             </button>
-          )}
-
-          {isPortfolio && (
-            <p className="text-slate-400 text-xs text-center -pb-1.5">
-              Portfolio mode: live API disabled
-            </p>
           )}
 
           {showDebug && (
@@ -753,6 +885,9 @@ export default function ChatWidget() {
           {mode === MODES.MANAGE && (
             <ManageFlow
               verifyAppointmentCode={verifyAppointmentCode}
+              cancelAppointmentByCode={cancelAppointmentByCode}
+              rescheduleAppointmentByCode={rescheduleAppointmentByCode}
+              isPortfolio={isPortfolio}
               onExit={() => {
                 setMode(MODES.ENTRY);
                 setEntryPhase(ENTRY_PHASES.ROOT);
@@ -857,7 +992,7 @@ export default function ChatWidget() {
   );
 }
 
-function ChatHeader({ onClose }) {
+function ChatHeader({ onClose, isPortfolio }) {
   return (
     <div className="flex items-center justify-between border-b px-4 py-3">
       <div>
@@ -866,6 +1001,11 @@ function ChatHeader({ onClose }) {
           <ChatTooltip content="Some of my answers are AI-generated and may be incorrect">
             <CircleAlert className="w-4 h-4 mx-1.5 text-slate-400 hover:scale-110 hover:text-slate-600 transition-all duration-300 ease-out" />
           </ChatTooltip>
+          {isPortfolio && (
+            <span className="ml-2 inline-flex items-center text-[10px] font-medium tracking-wide text-amber-700">
+              Portfolio • API is disabled
+            </span>
+          )}
         </p>
         <p className="text-xs text-gray-500">Secure • Private • Optional</p>
       </div>
@@ -1207,9 +1347,19 @@ const getAvailability = async (service) => {
 
   const data = await res.json();
 
-  console.log("get availability", data);
+  if (DEV) console.log("get availability", data);
 
-  return data.availability;
+  const availability = Array.isArray(data)
+    ? data.length === 0 ||
+      ("date" in (data[0] || {}) && "slots" in (data[0] || {}))
+      ? data
+      : data[0]?.availability
+    : data?.availability;
+
+  if (!Array.isArray(availability))
+    throw new Error("Invalid availability response shape");
+
+  return availability;
 };
 
 function BookingFlow({
@@ -1229,7 +1379,7 @@ function BookingFlow({
 }) {
   // if (!availability) return null;
 
-  console.log(availability);
+  if (DEV) console.log(availability);
 
   const needsAvailability =
     booking.step !== BOOKING_STEPS.IDLE &&
@@ -1256,7 +1406,7 @@ function BookingFlow({
           label="Loading availability..."
           timeoutMs={8000}
           onTimeout={() => {
-            console.log("timed out");
+            if (DEV) console.log("timed out");
             setAvailabilityTimedOut(true);
           }}
         />
@@ -1391,16 +1541,16 @@ function TimePicker({
       <div className="flex-1 min-h-0 overflow-y-auto py-2">
         {Object.entries(grouped).map(([abb, slots]) => {
           return (
-            <div className="flex flex-col">
+            <div key={`${day.date}-${abb}`} className="flex flex-col">
               <p className="font-semibold text-sm">{abb}</p>
               <div className="grid grid-cols-4 gap-2 p-2 content-start">
                 {slots.map((slot) => (
                   <button
-                    key={slot.slice(0, 5)}
+                    key={`${day.date}-${slot.raw}`}
                     className="text-sm font-normal rounded-md h-14 border hover:bg-primary/5 hover:border-primary p-1 flex flex-col items-center justify-center transition-all duration-300"
-                    onClick={() => onSelectTime(slot)}
+                    onClick={() => onSelectTime(slot.raw)}
                   >
-                    {slot.slice(0, 5)}
+                    {slot.display.slice(0, 5)}
                   </button>
                 ))}
               </div>
@@ -1575,7 +1725,7 @@ function BookingConfirmation({
         An email with meeting details have been sent to {booking.contact.email}.
       </p>
 
-      <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md mx-4 mt-4">
+      <div className="flex flex-col gap-1 p-4 border border-slate-400 rounded-md mx-4 mt-2">
         <h1 className="flex flex-row gap-2 group items-center justify-center">
           <Brain className="h-4 w-4 text-primary" />
           <span className="font-semibold text-lg">MindCare Center</span>
@@ -1612,45 +1762,77 @@ function BookingConfirmation({
               {booking.time}
             </span>
           </div>
-          {booking.result?.data?.callLink && (
-            <ChatTooltip content={booking.result.data.callLink}>
-              <a
-                href={booking.result.data.callLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary flex flex-row gap-2 items-center group"
-              >
+          {booking.result?.data?.appointmentId && (
+            <div className="flex items-center justify-between">
+              <div className="flex flex-row gap-2 items-center group">
                 <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-                  <Video className="h-4 w-4" />
+                  <IdCard className="h-4 w-4" />
                 </div>
-                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-                  Link to Call
+                <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                  Code: {booking.result.data.appointmentId}
                 </span>
-              </a>
-            </ChatTooltip>
+              </div>
+              <CopyButton
+                value={booking.result.data.appointmentId}
+                tooltip="Copy appointment code"
+                copiedText="Appointment code copied"
+              />
+            </div>
+          )}
+          {booking.result?.data?.callLink && (
+            <div className="flex items-center justify-between">
+              <ChatTooltip content={booking.result.data.callLink}>
+                <a
+                  href={booking.result.data.callLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary flex flex-row gap-2 items-center group"
+                >
+                  <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                    <Video className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                    Link to Call
+                  </span>
+                </a>
+              </ChatTooltip>
+              <CopyButton
+                value={booking.result.data.callLink}
+                tooltip="Copy call link"
+                copiedText="Call link copied"
+              />
+            </div>
           )}
           {booking.result?.data?.manageLink && (
-            <ChatTooltip content={booking.result.data.manageLink}>
-              <a
-                href={booking.result.data.manageLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary flex flex-row gap-2 items-center group"
-              >
-                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-                  <ChartNoAxesGantt className="h-4 w-4" />
-                </div>
-                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-                  Manage Booking
-                </span>
-              </a>
-            </ChatTooltip>
+            <div className="flex items-center justify-between">
+              <ChatTooltip content={booking.result.data.manageLink}>
+                <a
+                  href={booking.result.data.manageLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary flex flex-row gap-2 items-center group"
+                >
+                  <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                    <ChartNoAxesGantt className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                    Manage Booking
+                  </span>
+                </a>
+              </ChatTooltip>
+
+              <CopyButton
+                value={booking.result.data.manageLink}
+                tooltip="Copy manage link"
+                copiedText="Manage link copied"
+              />
+            </div>
           )}
         </div>
       </div>
       <button
         onClick={onDone}
-        className="text-xs text-slate-600 underline pt-2 hover:text-primary px-2 mx-auto"
+        className="text-xs text-slate-600 underline hover:text-primary px-2 mx-auto"
       >
         Back to Chat
       </button>
@@ -1658,31 +1840,155 @@ function BookingConfirmation({
   );
 }
 
-function ManageFlow({ verifyAppointmentCode, onExit }) {
+function ManageFlow({
+  verifyAppointmentCode,
+  cancelAppointmentByCode,
+  rescheduleAppointmentByCode,
+  isPortfolio,
+  onExit,
+}) {
   const [step, setStep] = useState(MANAGE_STEPS.CODE);
   const [appointment, setAppointment] = useState(null);
   const [error, setError] = useState(null);
+  const [manageResult, setManageResult] = useState(null);
+
+  const [rescheduleDate, setRescheduleDate] = useState(null);
+
+  const [availability, setAvailability] = useState(null);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState(null);
+  const [availabilityTimedOut, setAvailabilityTimedOut] = useState(false);
+
+  const [manageAction, setManageAction] = useState(null);
+
+  function mapAppointmentServiceToKey(serviceLabel) {
+    const normalized = serviceLabel.toLowerCase();
+
+    if (normalized.includes("consultation")) return "consultation";
+    if (normalized.includes("assessment")) return "assessment";
+
+    return "consultation";
+  }
 
   const handleSubmitCode = async (code) => {
     setStep(MANAGE_STEPS.LOADING);
     setError(null);
+    setManageAction(MANAGE_ACTIONS.LOOKUP);
 
     const res = await verifyAppointmentCode(code);
 
-    console.log(res);
+    if (DEV) console.log(res);
 
     if (res.result === "success") {
       setAppointment(res.data);
       setStep(MANAGE_STEPS.DETAILS);
     } else {
-      setError(res.error);
+      setError(
+        res.error ?? {
+          code: "UNKNOWN_MANAGE_ERROR",
+          message: "Something went wrong. Please try again.",
+          retryable: true,
+        },
+      );
+      setStep(MANAGE_STEPS.ERROR);
+    }
+  };
+
+  const handleCancelIntent = () => {
+    setError(null);
+    setStep(MANAGE_STEPS.CONFIRM_CANCEL);
+  };
+
+  const handleCancelConfirm = async () => {
+    setStep(MANAGE_STEPS.CANCEL_SUBMITTING);
+    setError(null);
+    setManageAction(MANAGE_ACTIONS.CANCEL);
+
+    const res = await cancelAppointmentByCode(appointment.code);
+
+    if (res.result === "success") {
+      setManageResult(res);
+      setStep(MANAGE_STEPS.CANCEL_RESULT);
+    } else {
+      setError(
+        res.error ?? {
+          code: "UNKNOWN_MANAGE_ERROR",
+          message: "Something went wrong. Please try again.",
+          retryable: true,
+        },
+      );
+      setStep(MANAGE_STEPS.ERROR);
+    }
+  };
+
+  const loadManageAvailability = async () => {
+    setLoadingAvailability(true);
+    setAvailabilityError(null);
+    setAvailabilityTimedOut(false);
+
+    if (DEV) console.log("loading availability");
+    try {
+      if (isPortfolio) {
+        setAvailability(MOCKS.AVAILABILITY);
+        return;
+      }
+
+      const serviceKey = mapAppointmentServiceToKey(appointment.service);
+      const data = await getAvailability(serviceKey);
+
+      if (DEV) console.log("data is", data);
+
+      setAvailability(data);
+    } catch {
+      setAvailabilityError(
+        "Unable to load availability. Please try again later.",
+      );
+    } finally {
+      setLoadingAvailability(false);
+    }
+  };
+
+  const handleRescheduleIntent = async () => {
+    setRescheduleDate(null);
+    setError(null);
+    setStep(MANAGE_STEPS.RESCHEDULE_DATE);
+    await loadManageAvailability();
+  };
+
+  const handleSelectRescheduleDate = (date) => {
+    setRescheduleDate(date);
+    setStep(MANAGE_STEPS.RESCHEDULE_TIME);
+  };
+
+  const handleSelectRescheduleTime = async (time) => {
+    setStep(MANAGE_STEPS.RESCHEDULE_SUBMITTING);
+
+    setManageAction(MANAGE_ACTIONS.RESCHEDULE);
+
+    const res = await rescheduleAppointmentByCode({
+      appCode: appointment.code,
+      date: rescheduleDate,
+      time,
+    });
+
+    if (res.result === "success") {
+      setAppointment((prev) => ({ ...prev, date: rescheduleDate, time }));
+      setManageResult(res);
+      setStep(MANAGE_STEPS.RESCHEDULE_RESULT);
+    } else {
+      setError(
+        res.error ?? {
+          code: "UNKNOWN_MANAGE_ERROR",
+          message: "Something went wrong. Please try again.",
+          retryable: true,
+        },
+      );
       setStep(MANAGE_STEPS.ERROR);
     }
   };
 
   switch (step) {
     case MANAGE_STEPS.CODE:
-    case MANAGE_STEPS.ERROR:
       return (
         <AppointmentCodeForm
           onSubmit={handleSubmitCode}
@@ -1690,12 +1996,148 @@ function ManageFlow({ verifyAppointmentCode, onExit }) {
           lookupError={error}
         />
       );
+
+    case MANAGE_STEPS.ERROR:
+      if (manageAction === MANAGE_ACTIONS.LOOKUP) {
+        return (
+          <AppointmentCodeForm
+            onSubmit={handleSubmitCode}
+            onBack={onExit}
+            lookupError={error}
+          />
+        );
+      }
+      return (
+        <ErrorMessage
+          message={error?.message || "Something went wrong. Please try again."}
+          retryable={error?.retryable}
+          onRetry={() => {
+            if (manageAction === "cancel") return handleCancelConfirm();
+            if (manageAction === "reschedule" && rescheduleDate) {
+              setStep(MANAGE_STEPS.RESCHEDULE_TIME);
+            }
+          }}
+          onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+        />
+      );
+
     case MANAGE_STEPS.LOADING:
       return <Spinner label="Verifying appointment..." />;
 
+    case MANAGE_STEPS.CANCEL_SUBMITTING:
+      return <Spinner label="Cancelling appointment..." />;
+
+    case MANAGE_STEPS.RESCHEDULE_SUBMITTING:
+      return <Spinner label="Rescheduling appointment..." />;
+
     case MANAGE_STEPS.DETAILS:
       return (
-        <ManageAppointmentDetails appointment={appointment} onBack={onExit} />
+        <ManageAppointmentDetails
+          appointment={appointment}
+          onBack={onExit}
+          onCancel={handleCancelIntent}
+          onReschedule={handleRescheduleIntent}
+        />
+      );
+
+    case MANAGE_STEPS.RESCHEDULE_DATE:
+      if (loadingAvailability && !availabilityTimedOut) {
+        return (
+          <Loading
+            label="Loading availability..."
+            timeoutMs={8000}
+            onTimeout={() => setAvailabilityTimedOut(true)}
+          />
+        );
+      }
+
+      if (availabilityTimedOut) {
+        return (
+          <ErrorMessage
+            message="This is taking longer than expected."
+            retryable
+            onRetry={() => {
+              setAvailabilityTimedOut(false);
+              loadManageAvailability();
+            }}
+            onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+          />
+        );
+      }
+
+      if (availabilityError) {
+        return (
+          <ErrorMessage
+            message={availabilityError}
+            retryable
+            onRetry={loadManageAvailability}
+            onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+          />
+        );
+      }
+
+      if (!availability || availability.length === 0) {
+        return (
+          <Empty
+            message="No available times found. Please try again later."
+            onRetry={loadManageAvailability}
+            onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+          />
+        );
+      }
+
+      return (
+        <DatePicker
+          availability={availability}
+          onSelectDate={(date) => handleSelectRescheduleDate(date)}
+          onSelectBack={() => setStep(MANAGE_STEPS.DETAILS)}
+        />
+      );
+
+    case MANAGE_STEPS.RESCHEDULE_TIME:
+      return (
+        <TimePicker
+          availability={availability}
+          selectedDate={rescheduleDate}
+          onSelectTime={(time) => handleSelectRescheduleTime(time)}
+          onSelectBack={() => setStep(MANAGE_STEPS.RESCHEDULE_DATE)}
+        />
+      );
+
+    case MANAGE_STEPS.RESCHEDULE_RESULT:
+      return (
+        <ManageActionResult
+          title="Appointment Rescheduled"
+          message={`New schedule: ${appointment?.date || ""} at ${appointment?.time || ""}`}
+          onBack={() => setStep(MANAGE_STEPS.DETAILS)}
+          onExit={onExit}
+        />
+      );
+
+    case MANAGE_STEPS.CONFIRM_CANCEL:
+      return (
+        <ConfirmCancelPanel
+          onConfirm={handleCancelConfirm}
+          onBack={() => setStep(MANAGE_STEPS.DETAILS)}
+        />
+      );
+
+    case MANAGE_STEPS.CANCEL_RESULT:
+      return (
+        <ManageActionResult
+          title={
+            manageResult?.result === "success"
+              ? "Appointment Updated"
+              : "Update Complete"
+          }
+          message={
+            manageResult?.data?.status === "cancelled"
+              ? "Appointment cancelled successfully"
+              : "Appointment updated successfully."
+          }
+          onBack={() => setStep(MANAGE_STEPS.DETAILS)}
+          onExit={onExit}
+        />
       );
 
     default:
@@ -1705,7 +2147,12 @@ function ManageFlow({ verifyAppointmentCode, onExit }) {
   return <div>Manage Flow</div>;
 }
 
-function ManageAppointmentDetails({ appointment, onBack }) {
+function ManageAppointmentDetails({
+  appointment,
+  onBack,
+  onCancel,
+  onReschedule,
+}) {
   return (
     <div className="p-4 gap-2 flex flex-col">
       <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md mx-4 mt-4">
@@ -1744,6 +2191,7 @@ function ManageAppointmentDetails({ appointment, onBack }) {
               <a
                 href={appointment.callLink}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="btn-primary flex flex-row gap-2 items-center group"
               >
                 <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
@@ -1760,6 +2208,7 @@ function ManageAppointmentDetails({ appointment, onBack }) {
               <a
                 href={appointment.manageLink}
                 target="_blank"
+                rel="noopener noreferrer"
                 className="btn-primary flex flex-row gap-2 items-center group"
               >
                 <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
@@ -1771,6 +2220,20 @@ function ManageAppointmentDetails({ appointment, onBack }) {
               </a>
             </ChatTooltip>
           )}
+        </div>
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={onReschedule}
+            className="flex-1 rounded-full text-sm border border-primary p-2 text-primary hover:bg-primary/5"
+          >
+            Reschedule
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 rounded-full text-sm border border-red-500 p-2 text-red-500 hover:bg-red-50"
+          >
+            Cancel
+          </button>
         </div>
       </div>
       <button
@@ -1808,14 +2271,14 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
           }}
         >
           <Form.Field>
-            <div>
+            <div classname="flex flex-col">
               <Form.Label className="text-[15px] font-medium leading-[35px]">
                 Appointment Code*
               </Form.Label>
               {lookupError && (
                 <Form.Message
                   id="code-error"
-                  className="text-[13px] text-red-500 opacity-80"
+                  className="text-xs text-red-500 opacity-80 fixed top"
                 >
                   {lookupError.message}
                 </Form.Message>
@@ -1855,6 +2318,53 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
             </Form.Submit>
           </div>
         </Form.Root>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmCancelPanel({ onConfirm, onBack }) {
+  return (
+    <div className="p-4 flex flex-col gap-4 flex-1 justify-center items-center">
+      <p className="text-sm text-slate-700 text-center">
+        Are you sure you want to cancel appointment?
+      </p>
+      <div className="flex gap-2">
+        <button
+          onClick={onBack}
+          className="rounded-full border px-4 py-2 text-sm hover:bg-primary/5"
+        >
+          Go Back
+        </button>
+        <button
+          onClick={onConfirm}
+          className="rounded-full bg-red-500 text-white px-4 py-2 text-sm hover:bg-red-700"
+        >
+          Confirm Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ManageActionResult({ title, message, onBack, onExit }) {
+  return (
+    <div className="p-4 flex flex-col gap-3 text-center items-center justify-center flex-1">
+      <p className="text-lg font-semibold text-slate-900">{title}</p>
+      <p className="text-sm text-slate-600">{message}</p>
+      <div className="flex gap-2 mt-2">
+        <button
+          onClick={onBack}
+          className="rounded-full border px-4 py-2 text-sm hover:bg-primary/5"
+        >
+          Go Back to Details
+        </button>
+        <button
+          onClick={onExit}
+          className="rounded-full bg-primary text-white px-4 py-2 text-sm hover:bg-primary/90"
+        >
+          Return to Chat
+        </button>
       </div>
     </div>
   );
@@ -1952,6 +2462,54 @@ function Spinner({ label }) {
     <div className="flex items-center gap-2 text-slate-500">
       <Loader2 className="h-4 w-4 animate-spin" />
       {label && <span className="text-sm">{label}</span>}
+    </div>
+  );
+}
+
+function CopyButton({
+  value,
+  tooltip = "Copy",
+  copiedText = "Copied",
+  className = "",
+}) {
+  const [copied, setCopied] = useState(false);
+
+  if (!value) return;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch (err) {
+      console.error("Copy failed:", err);
+    }
+  };
+
+  return (
+    <div className={`flex items-center gap-1 ${className}`}>
+      <span
+        className={`text-xs text-accent transition-opacity duration-150 ${
+          copied ? "opacity-100" : "opacity-0"
+        }`}
+        aria-live="polite"
+      >
+        Link copied!
+      </span>
+      <ChatTooltip content={copied ? copiedText : tooltip}>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="p-1 rounded hover:bg-slate-100 transition-colors"
+          aria-label={copied ? copiedText : tooltip}
+        >
+          {copied ? (
+            <Check className="h-4 w-4 text-primary" />
+          ) : (
+            <Copy className="h-4 w-4 text-slate-500" />
+          )}
+        </button>
+      </ChatTooltip>
     </div>
   );
 }

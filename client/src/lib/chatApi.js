@@ -1,4 +1,5 @@
 const DEFAULT_TIMEOUT = 15_000;
+const DEV = import.meta.env.DEV;
 
 export async function sendChatMessage({ sessionId, message, messages, page }) {
   const controller = new AbortController();
@@ -28,7 +29,7 @@ export async function sendChatMessage({ sessionId, message, messages, page }) {
     }
 
     const data = await res.json();
-    console.log("Raw chat API response:", data);
+    if (DEV) console.log("Raw chat API response:", data);
 
     if (typeof data.reply !== "string" || typeof data.intent !== "string") {
       throw new Error("Invalid chat response shape, data");
