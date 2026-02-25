@@ -24,6 +24,7 @@ import {
   IdCard,
   Copy,
   Check,
+  Menu,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
 import {
@@ -43,11 +44,25 @@ const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
 // const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
 // .VITE_TEST_CALENDAR_AVAILABILITY_URL;
 const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
-// const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
-const VITE_LOOKUP_URL = import.meta.env.VITE_TEST_LOOKUP_URL;
+const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
+// const VITE_LOOKUP_URL = import.meta.env.VITE_TEST_LOOKUP_URL;
 const VITE_MANAGE_CANCEL_URL = import.meta.env.VITE_MANAGE_CANCEL_URL;
 const VITE_MANAGE_RESCHEDULE_URL = import.meta.env.VITE_MANAGE_RESCHEDULE_URL;
+// const VITE_MANAGE_RESCHEDULE_URL = import.meta.env
+//   .VITE_TEST_MANAGE_RESCHEDULE_URL;
+const API_TIMEOUT_MS = 10_000;
 const DEV = import.meta.env.DEV;
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 const SUBMODES = Object.freeze({
   APPOINTMENT: Object.freeze({
@@ -185,103 +200,171 @@ function applyEntryAction(choice, setMessages) {
   );
 }
 
-function normalizeApiError(errorData, fallbackCode, fallbackMessage) {
+function normalizeApiError(
+  errorData,
+  fallbackCode,
+  fallbackMessage,
+  retryableOverride,
+) {
   return {
     result: "error",
     error: {
       code: errorData?.error?.code || fallbackCode,
       message: errorData?.error?.message || fallbackMessage,
-      retryable: errorData?.error?.retryable === true,
+      retryable:
+        typeof retryableOverride === "boolean"
+          ? retryableOverride
+          : errorData?.error?.retryable === true,
     },
   };
 }
 
 async function bookAppointment(payload) {
-  const res = await fetch(VITE_BOOKING_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await fetchWithTimeout(VITE_BOOKING_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  if (!res.ok) {
-    const errorData = await res.json();
-    return {
-      result: "error",
-      error: {
-        code: errorData.error?.code || "UNKNOWN_ERROR",
-        message:
-          errorData.error?.message ||
-          "A booking error occured. Please try again later.",
-        retryable: errorData.error?.retryable === true,
-      },
-    };
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      return normalizeApiError(
+        errorData,
+        "UNKNOWN_ERROR",
+        "A booking error occured. Please try again later.",
+      );
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return normalizeApiError(
+        {},
+        "REQUEST_TIMEOUT",
+        "Request timed out after 10 seconds. Please try again.",
+        true,
+      );
+    }
+
+    return normalizeApiError(
+      {},
+      "NETWORK_ERROR",
+      "Network error while booking appointment. Please try again.",
+      true,
+    );
   }
-
-  const data = await res.json();
-
-  return data;
 }
 
 async function cancelAppointment(payload) {
-  const res = await fetch(VITE_MANAGE_CANCEL_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await fetchWithTimeout(VITE_MANAGE_CANCEL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      return normalizeApiError(
+        errorData,
+        "CANCEL_UNKNOWN_ERROR",
+        "Unable to cancel appointment. Please try again later.",
+      );
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return normalizeApiError(
+        {},
+        "CANCEL_REQUEST_TIMEOUT",
+        "Cancel request timed out after 10 seconds. Please try again.",
+        true,
+      );
+    }
+
     return normalizeApiError(
-      errorData,
-      "CANCEL_UNKNOWN_ERROR",
-      "Unable to cancel appointment. Please try again later.",
+      {},
+      "CANCEL_NETWORK_ERROR",
+      "Network error while cancelling appointment. Please try again.",
+      true,
     );
   }
-
-  return await res.json();
 }
 
 async function rescheduleAppointment(payload) {
-  const res = await fetch(VITE_MANAGE_RESCHEDULE_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const res = await fetchWithTimeout(VITE_MANAGE_RESCHEDULE_URL, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      return normalizeApiError(
+        errorData,
+        "RESCHEDULE_UNKNOWN_ERROR",
+        "Unable to reschedule appointment. Please try again later.",
+      );
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return normalizeApiError(
+        {},
+        "RESCHEDULE_REQUEST_TIMEOUT",
+        "Reschedule request timed out after 10 seconds. Please try again.",
+        true,
+      );
+    }
+
     return normalizeApiError(
-      errorData,
-      "RESCHEDULE_UNKNOWN_ERROR",
-      "Unable to reschedule appointment. Please try again later.",
+      {},
+      "RESCHEDULE_NETWORK_ERROR",
+      "Network error while rescheduling appointment. Please try again.",
+      true,
     );
   }
-
-  return await res.json();
 }
 
 async function lookupAppointmentCode(appCode) {
-  const res = await fetch(VITE_LOOKUP_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ appCode }),
-  });
+  try {
+    const res = await fetchWithTimeout(VITE_LOOKUP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appCode }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json();
-    return {
-      result: "error",
-      error: {
-        code: err.error?.code || "LOOKUP_UNKNOWN_ERROR",
-        message:
-          err.error?.message ||
-          "Unable to verify appointment code. Please try again later.",
-        retryable: err.error?.retryable === true,
-      },
-    };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return normalizeApiError(
+        err,
+        "LOOKUP_UNKNOWN_ERROR",
+        "Unable to verify appointment code. Please try again later.",
+      );
+    }
+
+    return await res.json();
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return normalizeApiError(
+        {},
+        "LOOKUP_REQUEST_TIMEOUT",
+        "Verification timed out after 10 seconds. Please try again.",
+        true,
+      );
+    }
+
+    return normalizeApiError(
+      {},
+      "LOOKUP_NETWORK_ERROR",
+      "Network error while verifying appointment code. Please try again.",
+      true,
+    );
   }
-
-  return await res.json();
 }
 
 function applySubAction(entry, choice, setMessages) {
@@ -537,7 +620,26 @@ export default function ChatWidget() {
     bookingInitialState,
   );
 
+  const [aiUnlocked, setAiUnlocked] = useState(false);
+  const [aiUnlockReason, setAiUnlockReason] = useState(null);
+
+  const [aiErrorActive, setAiErrorActive] = useState(false);
+  const [lastUserMessage, setLastUserMessage] = useState("");
+
   const isPortfolio = isPortfolioMode(appMode);
+
+  const handleNeedHelp = useCallback(
+    (reason) => {
+      if (!isPortfolio) {
+        setAiUnlocked(true);
+        setAiUnlockReason(reason || null);
+      }
+      setMode(MODES.CHAT);
+    },
+    [isPortfolio, setMode],
+  );
+
+  const canUseAi = !isPortfolio && aiUnlocked;
 
   const verifyAppointmentCode = async (appCode) => {
     if (isPortfolio) {
@@ -568,7 +670,13 @@ export default function ChatWidget() {
     });
   };
 
-  const rescheduleAppointmentByCode = async ({ appCode, date, time }) => {
+  const rescheduleAppointmentByCode = async ({
+    appCode,
+    name,
+    email,
+    date,
+    time,
+  }) => {
     if (isPortfolio) {
       const normalized = appCode.trim().toUpperCase();
       const mock = MOCKS.MANAGE_RESCHEDULE_BY_CODE?.[normalized];
@@ -591,6 +699,8 @@ export default function ChatWidget() {
 
     return await rescheduleAppointment({
       appCode,
+      name,
+      email,
       date,
       time,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -749,23 +859,26 @@ export default function ChatWidget() {
 
   const sendMessage = async (content) => {
     if (isTyping) return;
-
     setIsTyping(true);
 
-    const userMsg = inputChat("user", content);
-
-    let nextMessages;
-
-    setMessages((m) => {
-      nextMessages = [...m, userMsg];
-      return nextMessages;
-    });
-
     try {
+      const trimmed = content.trim();
+      if (!trimmed) {
+        setIsTyping(false);
+        return;
+      }
+
+      setLastUserMessage(trimmed);
+      setAiErrorActive(false);
+
+      const userMsg = inputChat("user", trimmed);
+      const nextMessages = [...messages, userMsg];
+
+      setMessages(nextMessages);
       if (!isPortfolio) {
         const data = await sendChatMessage({
           sessionId,
-          message: content,
+          message: trimmed,
           messages: nextMessages.map(({ role, content }) => ({
             role,
             content,
@@ -773,12 +886,38 @@ export default function ChatWidget() {
           page: window.location.pathname,
         });
 
+        if (!data || typeof data.reply !== "string") {
+          throw new Error("CHAT_INVALID_RESPONSE");
+        }
         setMessages((m) => [...m, inputChat("assistant", data.reply)]);
       } else {
         setMessages((m) => [...m, inputChat("assistant", MOCKS.CHAT_REPLY)]);
       }
+
+      setAiErrorActive(false);
     } catch (err) {
-      console.error("Chat Error:", err);
+      const code = err?.message || "";
+      const errMsg =
+        code === "CHAT_TIMEOUT"
+          ? "I'm having trouble reaching the assistant right now (timeout)."
+          : code.startsWith("CHAT_API_ERROR_")
+            ? "The assistant service returned an error."
+            : code === "CHAT_INVALID_RESPONSE"
+              ? "The assistant response was invalid."
+              : code === "CHAT_CONFIG_ERROR"
+                ? "Chat endpoint is not configured."
+                : "I couldn't reach the assistant right now.";
+
+      setMessages((m) => [
+        ...m,
+        inputChat(
+          "assistant",
+          `${errMsg} You can retry, or go back to guided options.`,
+        ),
+      ]);
+
+      setAiErrorActive(true);
+      console.log({ mode, aiErrorActive, canUseAi });
     } finally {
       setIsTyping(false);
     }
@@ -892,6 +1031,8 @@ export default function ChatWidget() {
                 setMode(MODES.ENTRY);
                 setEntryPhase(ENTRY_PHASES.ROOT);
               }}
+              aiUnlocked={aiUnlocked}
+              onNeedHelp={handleNeedHelp}
             />
           )}
 
@@ -913,6 +1054,9 @@ export default function ChatWidget() {
               setEntryPhase={setEntryPhase}
               processBookingSubmission={processBookingSubmission}
               bookingLoading={bookingLoading}
+              isPortfolio={isPortfolio}
+              aiUnlocked={aiUnlocked}
+              onNeedHelp={handleNeedHelp}
             />
           )}
 
@@ -967,24 +1111,56 @@ export default function ChatWidget() {
                   (act) => act.action === MODES.QUESTION,
                 );
                 applySubAction(entry, choice, setMessages);
+                if (choice === SUBMODES.QUESTION.OTHERS) {
+                  handleNeedHelp("question_other_information");
+                }
                 setMode(MODES.CHAT);
                 setEntryPhase(ENTRY_PHASES.NONE);
               }}
             />
           )}
 
-          {entryPhase !== ENTRY_PHASES.ROOT && !booking.service && (
+          {entryPhase !== ENTRY_PHASES.ROOT && !booking.service ? (
             <ResetActions
               mode={mode}
               onSelect={() => {
                 setMode(MODES.ENTRY);
                 setEntryPhase(ENTRY_PHASES.ROOT);
+                setAiErrorActive(false);
+              }}
+            />
+          ) : null}
+
+          {mode === MODES.CHAT && aiErrorActive && (
+            <MessageRetry
+              onRetry={() => sendMessage(lastUserMessage)}
+              onReturn={() => {
+                setMode(MODES.ENTRY);
+                setEntryPhase(ENTRY_PHASES.ROOT);
+                setAiErrorActive(false);
               }}
             />
           )}
 
-          {mode === MODES.CHAT && (
+          {mode === MODES.CHAT && canUseAi && (
             <ChatInput onSend={sendMessage} disabled={isTyping} />
+          )}
+
+          {mode === MODES.CHAT && !canUseAi && (
+            <div className="border-t p-3 text-xs text-slate-600 flex items-center justify-between">
+              <span>
+                AI assistant unlocks after "Need more help" from an error path.
+              </span>
+              <button
+                onClick={() => {
+                  setMode(MODES.ENTRY);
+                  setEntryPhase(ENTRY_PHASES.ROOT);
+                }}
+                className="underline hover:text-primary"
+              >
+                Back to options
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1123,7 +1299,7 @@ function EntryActions({ onSelect }) {
 
 function SubActions({ subactions, onSelect }) {
   return (
-    <div className="space-y-2 mt-4 px-4 flex flex-col">
+    <div className="space-y-2 my-4 px-4 flex flex-col">
       {subactions.map((sub) => {
         return (
           <button
@@ -1142,7 +1318,7 @@ function SubActions({ subactions, onSelect }) {
 function ResetActions({ mode, onSelect }) {
   return (
     <>
-      <div className="space-y-2 p-4 flex flex-col">
+      <div className="space-y-2 pb-4 px-4 flex flex-col">
         <ChatTooltip content="Start Over">
           <button
             className={`btn p-2 rounded-full hover:bg-slate-100
@@ -1178,6 +1354,22 @@ function ChatTooltip({ content, children }) {
   );
 }
 
+function AppointmentDetailsHeader({ serviceLabel, dateLabel, timeLabel }) {
+  return (
+    <div className="w-full flex flex-col px-4 py-4 border-b border-slate-200 mb-4">
+      <p className="font-semibold text-lg text-slate-900">{serviceLabel}</p>
+      <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
+        <Calendar className="h-4 w-4" />
+        {dateLabel}
+      </div>
+      <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
+        <Clock className="h-4 w-4" />
+        {timeLabel}
+      </div>
+    </div>
+  );
+}
+
 function DetailsForm({ service, date, time, onSubmit, onBack }) {
   const serviceLabel = useMemo(() => {
     switch (service) {
@@ -1203,17 +1395,11 @@ function DetailsForm({ service, date, time, onSubmit, onBack }) {
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-start">
-      <div className="w-full flex flex-col px-4 py-4 border-b border-slate-200 mb-4">
-        <p className="font-semibold text-lg text-slate-900">{serviceLabel}</p>
-        <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
-          <Calendar className="h-4 w-4" />
-          {dateLabel}
-        </div>
-        <div className="flex flex-row items-center justify-start gap-2 text-slate-600 text-sm mt-1.5">
-          <Clock className="h-4 w-4" />
-          {time}
-        </div>
-      </div>
+      <AppointmentDetailsHeader
+        serviceLabel={serviceLabel}
+        dateLabel={dateLabel}
+        timeLabel={time}
+      />
       <div className="px-4 py-2 min-h-0 overflow-y-auto">
         <Form.Root
           className="w-[260px]"
@@ -1331,35 +1517,66 @@ function ServicePicker({ onSelect }) {
   );
 }
 
+function MessageRetry({ onRetry, onReturn }) {
+  return (
+    <div className="border-t px-3 py-2 text-xs text-slate-600 flex flex-col gap-2 justify-center items-center">
+      <span className="leading-5 text-red-500 opacity-90">
+        Assistant is unavailable right now.
+      </span>
+      <div className="flex items-center gap-3">
+        <button
+          className="text-slate-700 gap-1 p-2 hover:bg-primary/5 rounded-full underline"
+          onClick={onRetry}
+        >
+          Retry
+        </button>
+        <button
+          className="text-slate-700 gap-1 p-2 hover:bg-primary/5 rounded-full underline"
+          onClick={onReturn}
+        >
+          Return to Options
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const getAvailability = async (service) => {
-  const res = await fetch(VITE_CALENDAR_AVAILABILITY_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      service: service,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    }),
-  });
+  try {
+    const res = await fetchWithTimeout(VITE_CALENDAR_AVAILABILITY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service: service,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    });
 
-  if (!res.ok) {
-    throw new Error("Failed to fetch availability");
+    if (!res.ok) {
+      throw new Error("Failed to fetch availability");
+    }
+
+    const data = await res.json();
+
+    if (DEV) console.log("get availability", data);
+
+    const availability = Array.isArray(data)
+      ? data.length === 0 ||
+        ("date" in (data[0] || {}) && "slots" in (data[0] || {}))
+        ? data
+        : data[0]?.availability
+      : data?.availability;
+
+    if (!Array.isArray(availability))
+      throw new Error("Invalid availability response shape");
+
+    return availability;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("Availability request timed out after 10 seconds.");
+    }
+    throw err;
   }
-
-  const data = await res.json();
-
-  if (DEV) console.log("get availability", data);
-
-  const availability = Array.isArray(data)
-    ? data.length === 0 ||
-      ("date" in (data[0] || {}) && "slots" in (data[0] || {}))
-      ? data
-      : data[0]?.availability
-    : data?.availability;
-
-  if (!Array.isArray(availability))
-    throw new Error("Invalid availability response shape");
-
-  return availability;
 };
 
 function BookingFlow({
@@ -1376,6 +1593,9 @@ function BookingFlow({
   setEntryPhase,
   processBookingSubmission,
   bookingLoading,
+  isPortfolio,
+  aiUnlocked,
+  onNeedHelp,
 }) {
   // if (!availability) return null;
 
@@ -1397,6 +1617,8 @@ function BookingFlow({
             setMode(MODES.ENTRY);
             setEntryPhase(ENTRY_PHASES.ROOT);
           }}
+          showNeedHelp={!isPortfolio && !aiUnlocked}
+          onNeedHelp={() => onNeedHelp("booking_availability_error")}
         />
       );
 
@@ -1426,6 +1648,8 @@ function BookingFlow({
             setMode(MODES.ENTRY);
             setEntryPhase(ENTRY_PHASES.ROOT);
           }}
+          showNeedHelp={!isPortfolio && !aiUnlocked}
+          onNeedHelp={() => onNeedHelp("booking_availability_timeout")}
         />
       );
     }
@@ -1508,6 +1732,9 @@ function BookingFlow({
           setEntryPhase={setEntryPhase}
           dispatchBooking={dispatchBooking}
           bookingLoading={bookingLoading}
+          isPortfolio={isPortfolio}
+          aiUnlocked={aiUnlocked}
+          onNeedHelp={onNeedHelp}
         />
       );
     default:
@@ -1687,6 +1914,9 @@ function BookingConfirmation({
   setEntryPhase,
   dispatchBooking,
   bookingLoading,
+  isPortfolio,
+  aiUnlocked,
+  onNeedHelp,
 }) {
   const date = new Date(booking.date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -1712,6 +1942,8 @@ function BookingConfirmation({
           setEntryPhase(ENTRY_PHASES.ROOT);
         }}
         isLoading={bookingLoading}
+        showNeedHelp={!isPortfolio && !aiUnlocked}
+        onNeedHelp={() => onNeedHelp("booking_submission_error")}
       />
     );
   }
@@ -1846,6 +2078,8 @@ function ManageFlow({
   rescheduleAppointmentByCode,
   isPortfolio,
   onExit,
+  aiUnlocked,
+  onNeedHelp,
 }) {
   const [step, setStep] = useState(MANAGE_STEPS.CODE);
   const [appointment, setAppointment] = useState(null);
@@ -1965,8 +2199,12 @@ function ManageFlow({
 
     setManageAction(MANAGE_ACTIONS.RESCHEDULE);
 
+    if (DEV) console.log(appointment);
+
     const res = await rescheduleAppointmentByCode({
       appCode: appointment.code,
+      name: appointment.name,
+      email: appointment.email,
       date: rescheduleDate,
       time,
     });
@@ -1994,6 +2232,8 @@ function ManageFlow({
           onSubmit={handleSubmitCode}
           onBack={onExit}
           lookupError={error}
+          showNeedHelp={!isPortfolio && !aiUnlocked}
+          onNeedHelp={() => onNeedHelp("manage_lookup_error")}
         />
       );
 
@@ -2004,6 +2244,8 @@ function ManageFlow({
             onSubmit={handleSubmitCode}
             onBack={onExit}
             lookupError={error}
+            showNeedHelp={!isPortfolio && !aiUnlocked}
+            onNeedHelp={() => onNeedHelp("manage_lookup_error")}
           />
         );
       }
@@ -2012,23 +2254,38 @@ function ManageFlow({
           message={error?.message || "Something went wrong. Please try again."}
           retryable={error?.retryable}
           onRetry={() => {
-            if (manageAction === "cancel") return handleCancelConfirm();
-            if (manageAction === "reschedule" && rescheduleDate) {
+            if (manageAction === MANAGE_ACTIONS.CANCEL)
+              return handleCancelConfirm();
+            if (manageAction === MANAGE_ACTIONS.RESCHEDULE && rescheduleDate) {
               setStep(MANAGE_STEPS.RESCHEDULE_TIME);
             }
           }}
           onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+          showNeedHelp={!isPortfolio && !aiUnlocked}
+          onNeedHelp={() => onNeedHelp("manage_action_error")}
         />
       );
 
     case MANAGE_STEPS.LOADING:
-      return <Spinner label="Verifying appointment..." />;
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <Spinner label="Verifying appointment..." />
+        </div>
+      );
 
     case MANAGE_STEPS.CANCEL_SUBMITTING:
-      return <Spinner label="Cancelling appointment..." />;
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <Spinner label="Cancelling appointment..." />
+        </div>
+      );
 
     case MANAGE_STEPS.RESCHEDULE_SUBMITTING:
-      return <Spinner label="Rescheduling appointment..." />;
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <Spinner label="Rescheduling appointment..." />
+        </div>
+      );
 
     case MANAGE_STEPS.DETAILS:
       return (
@@ -2061,6 +2318,8 @@ function ManageFlow({
               loadManageAvailability();
             }}
             onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+            showNeedHelp={!isPortfolio && !aiUnlocked}
+            onNeedHelp={() => onNeedHelp("manage_availability_timeout")}
           />
         );
       }
@@ -2072,6 +2331,8 @@ function ManageFlow({
             retryable
             onRetry={loadManageAvailability}
             onCancel={() => setStep(MANAGE_STEPS.DETAILS)}
+            showNeedHelp={!isPortfolio && !aiUnlocked}
+            onNeedHelp={() => onNeedHelp("manage_availability_error")}
           />
         );
       }
@@ -2153,14 +2414,28 @@ function ManageAppointmentDetails({
   onCancel,
   onReschedule,
 }) {
+  const dateLabel = useMemo(() => {
+    const parsed = new Date(appointment.date);
+    if (Number.isNaN(parsed.getTime())) {
+      return appointment.date;
+    }
+
+    return parsed.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [appointment.date]);
+
   return (
     <div className="p-4 gap-2 flex flex-col">
-      <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md mx-4 mt-4">
-        <h1 className="flex flex-row gap-2 group items-center justify-center">
-          <Brain className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-lg">MindCare Center</span>
-        </h1>
-        <h3 className="text-center text-sm">{appointment.service}</h3>
+      <AppointmentDetailsHeader
+        serviceLabel={appointment.service}
+        dateLabel={dateLabel}
+        timeLabel={appointment.time}
+      />
+      <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md">
         <div className="flex flex-col mt-2">
           <div className="flex flex-row gap-2 items-center group">
             <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
@@ -2170,55 +2445,51 @@ function ManageAppointmentDetails({
               {appointment.name}
             </span>
           </div>
-          <div className="flex flex-row gap-2 items-center group">
-            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-              <Calendar className="h-4 w-4" />
-            </div>
-            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-              {appointment.date}
-            </span>
-          </div>
-          <div className="flex flex-row gap-2 items-center group">
-            <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-              <Clock className="h-4 w-4" />
-            </div>
-            <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-              {appointment.time}
-            </span>
-          </div>
           {appointment.callLink && (
-            <ChatTooltip content={appointment.callLink}>
-              <a
-                href={appointment.callLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary flex flex-row gap-2 items-center group"
-              >
-                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-                  <Video className="h-4 w-4" />
-                </div>
-                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-                  Link to Call
-                </span>
-              </a>
-            </ChatTooltip>
+            <div className="flex gap-2 justify-between">
+              <ChatTooltip content={appointment.callLink}>
+                <a
+                  href={appointment.callLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary flex flex-row gap-2 items-center group"
+                >
+                  <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                    <Video className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                    Link to Call
+                  </span>
+                </a>
+              </ChatTooltip>
+              <CopyButton
+                value={appointment.callLink}
+                tooltip="Copy call link"
+              />
+            </div>
           )}
           {appointment.manageLink && (
-            <ChatTooltip content={appointment.manageLink}>
-              <a
-                href={appointment.manageLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary flex flex-row gap-2 items-center group"
-              >
-                <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
-                  <ChartNoAxesGantt className="h-4 w-4" />
-                </div>
-                <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-                  Manage Booking
-                </span>
-              </a>
-            </ChatTooltip>
+            <div className="flex gap-2 justify-between">
+              <ChatTooltip content={appointment.manageLink}>
+                <a
+                  href={appointment.manageLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary flex flex-row gap-2 items-center group"
+                >
+                  <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
+                    <ChartNoAxesGantt className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm text-slate-600 underline group-hover:text-primary group-hover:font-semibold transition-all duration-300">
+                    Manage Booking
+                  </span>
+                </a>
+              </ChatTooltip>
+              <CopyButton
+                value={appointment.manageLink}
+                tooltip="Copy link to details"
+              />
+            </div>
           )}
         </div>
         <div className="flex gap-2 mt-4">
@@ -2246,7 +2517,13 @@ function ManageAppointmentDetails({
   );
 }
 
-function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
+function AppointmentCodeForm({
+  onSubmit,
+  onBack,
+  lookupError,
+  showNeedHelp,
+  onNeedHelp,
+}) {
   const [appCode, setAppCode] = useState("");
   const canSubmit = appCode.trim();
 
@@ -2261,9 +2538,9 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
           booking.
         </p>
       </div>
-      <div>
+      <div className="w-full flex justify-center">
         <Form.Root
-          className="w-full"
+          className="w-full max-w-[280px]"
           onSubmit={(e) => {
             e.preventDefault();
             if (!canSubmit) return;
@@ -2271,18 +2548,10 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
           }}
         >
           <Form.Field>
-            <div classname="flex flex-col">
+            <div className="flex flex-col">
               <Form.Label className="text-[15px] font-medium leading-[35px]">
                 Appointment Code*
               </Form.Label>
-              {lookupError && (
-                <Form.Message
-                  id="code-error"
-                  className="text-xs text-red-500 opacity-80 fixed top"
-                >
-                  {lookupError.message}
-                </Form.Message>
-              )}
             </div>
             <Form.Control asChild>
               <input
@@ -2292,10 +2561,18 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
                 name="appCode"
                 placeholder="Your appointment code ..."
                 value={appCode}
-                aria-describedby="code-error"
+                aria-describedby={lookupError ? "code-error" : undefined}
                 onChange={(e) => setAppCode(e.target.value)}
               />
             </Form.Control>
+            {lookupError && (
+              <p
+                id="code-error"
+                className="mt-1 text-xs leading-5 text-red-500 opacity-90 break-words whitespace-normal"
+              >
+                {lookupError.message}
+              </p>
+            )}
           </Form.Field>
           <div className="flex flex-row items-center justify-between gap-3 mt-3">
             <ChatTooltip content="Go Back to Main Menu">
@@ -2317,6 +2594,15 @@ function AppointmentCodeForm({ onSubmit, onBack, lookupError }) {
               </button>
             </Form.Submit>
           </div>
+          {showNeedHelp && (
+            <button
+              type="button"
+              onClick={onNeedHelp}
+              className="mt-2 w-full rounded-full border border-primary px-3 py-2 text-primary text-sm hover:bg-primary/5 transition-colors duration-300"
+            >
+              Need more help
+            </button>
+          )}
         </Form.Root>
       </div>
     </div>
@@ -2402,7 +2688,16 @@ function Loading({ label = "Loading availability...", timeoutMs, onTimeout }) {
   );
 }
 
-function ErrorMessage({ message, retryable, onRetry, onCancel, isLoading }) {
+function ErrorMessage({
+  message,
+  retryable,
+  onRetry,
+  onCancel,
+  isLoading,
+  showNeedHelp,
+  onNeedHelp,
+}) {
+  if (DEV) console.log("show need help", showNeedHelp);
   return (
     <div className="flex flex-col items-center justify-center p-4 text-center flex-1">
       <CircleAlert className="h-8 w-8 mb-2 text-red-500" />
@@ -2423,6 +2718,15 @@ function ErrorMessage({ message, retryable, onRetry, onCancel, isLoading }) {
           >
             Cancel
           </button>
+          {showNeedHelp && (
+            <button
+              onClick={onNeedHelp}
+              disabled={isLoading}
+              className="rounded-full border border-primary px-4 py-2 text-primary text-sm hover:bg-primary/5"
+            >
+              Need More Help
+            </button>
+          )}
         </div>
       )}
     </div>
