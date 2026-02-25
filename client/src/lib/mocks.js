@@ -18,6 +18,7 @@ const MOCKS = {
       data: {
         code: "DEMO123",
         service: "Online Mental Health Consultation",
+        status: "confirmed",
         name: "Demo User",
         date: "2026-02-25",
         time: "10:00 AM",
@@ -48,9 +49,8 @@ const MOCKS = {
     DEMO123: {
       result: "success",
       data: {
-        code: "DEMO123",
         status: "cancelled",
-        cancelledAt: "2026-02-20T10:00:00.00Z",
+        message: "Booking cancel successful",
       },
     },
     ASSESS456: {

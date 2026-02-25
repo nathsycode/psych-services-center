@@ -47,6 +47,7 @@ const VITE_BOOKING_URL = import.meta.env.VITE_BOOKING_URL;
 const VITE_LOOKUP_URL = import.meta.env.VITE_LOOKUP_URL;
 // const VITE_LOOKUP_URL = import.meta.env.VITE_TEST_LOOKUP_URL;
 const VITE_MANAGE_CANCEL_URL = import.meta.env.VITE_MANAGE_CANCEL_URL;
+// const VITE_MANAGE_CANCEL_URL = import.meta.env.VITE_TEST_MANAGE_CANCEL_URL;
 const VITE_MANAGE_RESCHEDULE_URL = import.meta.env.VITE_MANAGE_RESCHEDULE_URL;
 // const VITE_MANAGE_RESCHEDULE_URL = import.meta.env
 //   .VITE_TEST_MANAGE_RESCHEDULE_URL;
@@ -68,8 +69,6 @@ const SUBMODES = Object.freeze({
   APPOINTMENT: Object.freeze({
     SCHEDULE: "schedule",
     MANAGE: "manage",
-    // CANCEL: "cancel", TODO: Don't forget to fix
-    // RESCHEDULE: "reschedule",
   }),
   QUESTION: Object.freeze({
     SERVICES: "services",
@@ -99,20 +98,6 @@ const entryActions = [
         userMsg: "I would like to manage an existing an appointment",
         botMsg: "Sure! Please provide your appointment code.",
       },
-      // {
-      //   sub: SUBMODES.APPOINTMENT.CANCEL,
-      //   subDesc: "Cancel",
-      //   userMsg: "I would like to cancel an upcoming appointment",
-      //   botMsg:
-      //     "Sorry to hear that. To proceed, kindly confirm your full name and email address.",
-      // },
-      // {
-      //   sub: SUBMODES.APPOINTMENT.RESCHEDULE,
-      //   subDesc: "Reschedule",
-      //   userMsg: "I would like to reschedule an existing appointment",
-      //   botMsg:
-      //     "I'd love to assist -- To proceed, please provide your full name, email address and your preferred date and time for the new schedule.",
-      // },
     ],
   },
   {
@@ -175,6 +160,25 @@ function formatTime(timestamp) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatAppointmentTime(time) {
+  if (!time || typeof time !== "string") return time;
+  if (/[AP]M$/i.test(time)) return time;
+
+  const match = time.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return time;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] || 0);
+  const meridian = hours >= 12 ? "PM" : "AM";
+  hours = hours % 12 || 12;
+
+  const minutesLabel = String(minutes).padStart(2, "0");
+  const secondsLabel = seconds ? `:${String(seconds).padStart(2, "0")}` : "";
+
+  return `${hours}:${minutesLabel}${secondsLabel} ${meridian}`;
 }
 
 function inputChat(role, content) {
@@ -890,6 +894,8 @@ export default function ChatWidget() {
           throw new Error("CHAT_INVALID_RESPONSE");
         }
         setMessages((m) => [...m, inputChat("assistant", data.reply)]);
+
+        if (DEV) console.log(data);
       } else {
         setMessages((m) => [...m, inputChat("assistant", MOCKS.CHAT_REPLY)]);
       }
@@ -917,7 +923,9 @@ export default function ChatWidget() {
       ]);
 
       setAiErrorActive(true);
-      console.log({ mode, aiErrorActive, canUseAi });
+      if (DEV) {
+        console.log({ mode, aiErrorActive, canUseAi });
+      }
     } finally {
       setIsTyping(false);
     }
@@ -1354,7 +1362,13 @@ function ChatTooltip({ content, children }) {
   );
 }
 
-function AppointmentDetailsHeader({ serviceLabel, dateLabel, timeLabel }) {
+function AppointmentDetailsHeader({
+  serviceLabel,
+  dateLabel,
+  timeLabel,
+  code,
+  statusLabel,
+}) {
   return (
     <div className="w-full flex flex-col px-4 py-4 border-b border-slate-200 mb-4">
       <p className="font-semibold text-lg text-slate-900">{serviceLabel}</p>
@@ -1366,6 +1380,23 @@ function AppointmentDetailsHeader({ serviceLabel, dateLabel, timeLabel }) {
         <Clock className="h-4 w-4" />
         {timeLabel}
       </div>
+
+      {(code || statusLabel) && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {code && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 text-xs px-2 py-1">
+              <IdCard className="h-3.5 w-3.5" />
+              Code: {code}
+            </span>
+          )}
+          {statusLabel && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-600 text-xs px-2 py-1">
+              <CircleAlert className="h-3.5 w-3.5" />
+              Status: {statusLabel}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1398,7 +1429,7 @@ function DetailsForm({ service, date, time, onSubmit, onBack }) {
       <AppointmentDetailsHeader
         serviceLabel={serviceLabel}
         dateLabel={dateLabel}
-        timeLabel={time}
+        timeLabel={formatAppointmentTime(time)}
       />
       <div className="px-4 py-2 min-h-0 overflow-y-auto">
         <Form.Root
@@ -1991,7 +2022,7 @@ function BookingConfirmation({
               <Clock className="h-4 w-4" />
             </div>
             <span className="text-sm text-slate-600 group-hover:text-primary group-hover:font-semibold transition-all duration-300">
-              {booking.time}
+              {formatAppointmentTime(booking.time)}
             </span>
           </div>
           {booking.result?.data?.appointmentId && (
@@ -2141,6 +2172,7 @@ function ManageFlow({
     const res = await cancelAppointmentByCode(appointment.code);
 
     if (res.result === "success") {
+      setAppointment((prev) => ({ ...prev, status: "cancelled" }));
       setManageResult(res);
       setStep(MANAGE_STEPS.CANCEL_RESULT);
     } else {
@@ -2369,7 +2401,7 @@ function ManageFlow({
       return (
         <ManageActionResult
           title="Appointment Rescheduled"
-          message={`New schedule: ${appointment?.date || ""} at ${appointment?.time || ""}`}
+          message={`New schedule: ${appointment?.date || ""} at ${formatAppointmentTime(appointment?.time) || ""}`}
           onBack={() => setStep(MANAGE_STEPS.DETAILS)}
           onExit={onExit}
         />
@@ -2428,15 +2460,75 @@ function ManageAppointmentDetails({
     });
   }, [appointment.date]);
 
+  const normalizedStatus = (appointment.status ?? "").toLowerCase();
+
+  const parseAppointmentDateTime = useCallback(() => {
+    if (!appointment.date) return null;
+
+    const sanitizedDate = appointment.date.replace(/^[A-Za-z]+,\s*/, "");
+    const baseDate = new Date(sanitizedDate);
+    if (Number.isNaN(baseDate.getTime())) return null;
+
+    const timeMatch = appointment.time?.match(
+      /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i,
+    );
+
+    if (!timeMatch) return baseDate;
+
+    let hours = Number(timeMatch[1]);
+    const minutes = Number(timeMatch[2]);
+    const seconds = Number(timeMatch[3] || 0);
+    const meridian = timeMatch[4].toUpperCase();
+
+    if (meridian === "PM" && hours < 12) hours += 12;
+    if (meridian === "AM" && hours === 12) hours = 0;
+
+    const dt = new Date(baseDate);
+    dt.setHours(hours, minutes, seconds, 0);
+    return dt;
+  }, [appointment.date, appointment.time]);
+
+  const isComplete = useMemo(() => {
+    const parsed = parseAppointmentDateTime();
+    if (!parsed) return false;
+    const isPast = parsed.getTime() < Date.now();
+    if (!isPast) return false;
+    if (!normalizedStatus) return true;
+    return normalizedStatus === "confirmed" || normalizedStatus === "complete";
+  }, [normalizedStatus, parseAppointmentDateTime]);
+
+  const isCancelled =
+    normalizedStatus === "cancelled" || normalizedStatus === "canceled";
+
+  const isTerminal = isCancelled || isComplete;
+
+  const statusLabel = isCancelled
+    ? "Cancelled"
+    : isComplete
+      ? "Completed"
+      : undefined;
+
+  if (DEV) {
+    console.log("status debug", {
+      status: appointment.status,
+      date: appointment.date,
+      time: appointment.time,
+      parsed: parseAppointmentDateTime()?.toString(),
+      isComplete,
+    });
+  }
+
   return (
     <div className="p-4 gap-2 flex flex-col">
       <AppointmentDetailsHeader
         serviceLabel={appointment.service}
         dateLabel={dateLabel}
-        timeLabel={appointment.time}
+        timeLabel={formatAppointmentTime(appointment.time)}
+        code={appointment.code}
+        statusLabel={statusLabel}
       />
-      <div className="flex flex-col gap-2 p-4 border border-slate-400 rounded-md">
-        <div className="flex flex-col mt-2">
+      <div className="flex flex-col gap-1 p-3 border border-slate-400 rounded-md">
+        <div className="flex flex-col mt-1">
           <div className="flex flex-row gap-2 items-center group">
             <div className="p-2 text-slate-600 group-hover:text-white group-hover:bg-primary transition-all duration-300 ease-in-out rounded-full">
               <User className="h-4 w-4" />
@@ -2492,16 +2584,26 @@ function ManageAppointmentDetails({
             </div>
           )}
         </div>
-        <div className="flex gap-2 mt-4">
+        <div className="flex gap-2 mt-2">
           <button
             onClick={onReschedule}
-            className="flex-1 rounded-full text-sm border border-primary p-2 text-primary hover:bg-primary/5"
+            disabled={isTerminal}
+            className={`flex-1 rounded-full text-sm border p-2 ${
+              isTerminal
+                ? "border-slate-300 text-slate-400 cursor-not-allowed bg-slate-50"
+                : "border-primary text-primary hover:bg-primary/5"
+            }`}
           >
             Reschedule
           </button>
           <button
             onClick={onCancel}
-            className="flex-1 rounded-full text-sm border border-red-500 p-2 text-red-500 hover:bg-red-50"
+            disabled={isTerminal}
+            className={`flex-1 rounded-full text-sm border p-2 ${
+              isTerminal
+                ? "border-slate-300 text-slate-400 cursor-not-allowed bg-slate-50"
+                : "border-red-500 text-red-500 hover:bg-red-50"
+            }`}
           >
             Cancel
           </button>

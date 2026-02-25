@@ -1,6 +1,7 @@
 const DEFAULT_TIMEOUT = 15_000;
 const DEV = import.meta.env.DEV;
 const VITE_CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL;
+// const VITE_CHAT_API_URL = import.meta.env.VITE_TEST_CHAT_API_URL;
 
 export async function sendChatMessage({
   sessionId,
