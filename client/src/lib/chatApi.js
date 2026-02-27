@@ -1,7 +1,31 @@
 const DEFAULT_TIMEOUT = 15_000;
 const DEV = import.meta.env.DEV;
 const VITE_CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL;
+const DEFAULT_INTENT = "general";
 // const VITE_CHAT_API_URL = import.meta.env.VITE_TEST_CHAT_API_URL;
+
+const normalizeChatResponse = (data) => {
+  const payload = Array.isArray(data) ? data[0] : data;
+
+  if (!payload) return null;
+
+  if (typeof payload.reply === "string") {
+    return payload;
+  }
+
+  if (payload.result === "error" && payload.error?.message) {
+    return {
+      reply:
+        typeof payload.reply === "string"
+          ? payload.reply
+          : payload.error.message,
+      intent: payload.intent || DEFAULT_INTENT,
+      error: payload.error,
+    };
+  }
+
+  return null;
+};
 
 export async function sendChatMessage({
   sessionId,
@@ -14,6 +38,7 @@ export async function sendChatMessage({
 }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   if (!VITE_CHAT_API_URL) throw new Error("Missing VITE_CHAT_API_URL");
 
@@ -35,6 +60,7 @@ export async function sendChatMessage({
           flow,
           aiUnlockReason,
           lastErrorCode,
+          timezone,
         }),
       },
     );
@@ -46,11 +72,17 @@ export async function sendChatMessage({
     const data = await res.json();
     if (DEV) console.log("Raw chat API response:", data);
 
-    if (typeof data.reply !== "string" || typeof data.intent !== "string") {
+    const normalized = normalizeChatResponse(data);
+
+    if (!normalized || typeof normalized.reply !== "string") {
       throw new Error("CHAT_INVALID_RESPONSE");
     }
 
-    return data;
+    if (typeof normalized.intent !== "string") {
+      normalized.intent = DEFAULT_INTENT;
+    }
+
+    return normalized;
   } catch (err) {
     if (err.name === "AbortError") {
       throw new Error("CHAT_TIMEOUT");

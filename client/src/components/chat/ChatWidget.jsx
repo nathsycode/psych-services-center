@@ -27,6 +27,8 @@ import {
   Menu,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   APP_MODES,
   getInitialMode,
@@ -139,7 +141,28 @@ const entryActions = [
   },
 ];
 
+const UI_ACTIONS = Object.freeze({
+  LOOKUP_SUCCESS: "lookup_success",
+});
+
 // Helpers
+
+function mapAiAppointmentToManage(app) {
+  if (!app) return null;
+
+  return {
+    service: app.service,
+    date: app.date,
+    time: app.time,
+    timezone: app.timeZone,
+    code: app.appointmentCode,
+    name: app.contact?.fullName,
+    email: app.contact?.email,
+    callLink: app.callLink,
+    manageLink: app.manageLink,
+    status: app.status,
+  };
+}
 
 function loadState() {
   try {
@@ -181,12 +204,13 @@ function formatAppointmentTime(time) {
   return `${hours}:${minutesLabel}${secondsLabel} ${meridian}`;
 }
 
-function inputChat(role, content) {
+function inputChat(role, content, meta = null) {
   return {
     id: crypto.randomUUID(),
     role: role,
     content: content,
     timestamp: Date.now(),
+    meta,
   };
 }
 
@@ -479,6 +503,7 @@ const bookingInitialState = {
   date: null,
   time: null,
   contact: null,
+  contactDraft: null,
   result: null,
   error: null,
   lookupResult: null,
@@ -585,6 +610,26 @@ function bookingReducer(state, action) {
         contact: action.contact,
       };
 
+    case ACTION_TYPES.SET_BOOKING_CONTEXT:
+      return {
+        ...state,
+        step: BOOKING_STEPS.DETAILS,
+        service: action.service ?? state.service,
+        date: action.date ?? state.date,
+        time: action.time ?? state.time,
+        contactDraft: action.contactDraft ?? null,
+      };
+
+    case ACTION_TYPES.SET_BOOKING_DATE_CONTEXT:
+      return {
+        ...state,
+        step: BOOKING_STEPS.TIME,
+        service: action.service ?? state.service,
+        date: action.date ?? state.date,
+        time: null,
+        contactDraft: action.contactDraft ?? null,
+      };
+
     default:
       return state;
   }
@@ -626,6 +671,7 @@ export default function ChatWidget() {
 
   const [aiUnlocked, setAiUnlocked] = useState(false);
   const [aiUnlockReason, setAiUnlockReason] = useState(null);
+  const [aiLookupAppointment, setAiLookupAppointment] = useState(null);
 
   const [aiErrorActive, setAiErrorActive] = useState(false);
   const [lastUserMessage, setLastUserMessage] = useState("");
@@ -890,12 +936,39 @@ export default function ChatWidget() {
           page: window.location.pathname,
         });
 
-        if (!data || typeof data.reply !== "string") {
+        const payload = Array.isArray(data) ? data[0] : data;
+
+        if (!payload || typeof payload.reply !== "string") {
           throw new Error("CHAT_INVALID_RESPONSE");
         }
-        setMessages((m) => [...m, inputChat("assistant", data.reply)]);
 
-        if (DEV) console.log(data);
+        const meta = {
+          intent: payload.intent,
+          uiAction: payload.uiAction,
+          dateContext: payload.dateContext,
+          suggestions: Array.isArray(payload.suggestions)
+            ? payload.suggestions
+            : [],
+          service: payload.service, // "consultation" | "assessment"
+          contact: payload.contact, // {fullName, email}
+          appointment: payload.appointment,
+        };
+        setMessages((m) => [...m, inputChat("assistant", payload.reply, meta)]);
+
+        if (
+          payload.uiAction === UI_ACTIONS.LOOKUP_SUCCESS &&
+          payload.intent === "lookup"
+        ) {
+          const mapped = mapAiAppointmentToManage(payload.appointment);
+
+          if (mapped) {
+            setMode(MODES.MANAGE);
+            setEntryPhase(ENTRY_PHASES.NONE);
+            setAiLookupAppointment(mapped);
+          }
+        }
+
+        if (DEV) console.log(payload);
       } else {
         setMessages((m) => [...m, inputChat("assistant", MOCKS.CHAT_REPLY)]);
       }
@@ -930,6 +1003,63 @@ export default function ChatWidget() {
       setIsTyping(false);
     }
   };
+
+  const handleSuggestionClick = useCallback(
+    (suggestion, meta) => {
+      const service = meta?.service || booking.service;
+
+      if (!service) {
+        dispatchBooking({ type: ACTION_TYPES.START_BOOKING });
+        setEntryPhase(ENTRY_PHASES.NONE);
+        setMode(MODES.APPOINTMENT);
+        return;
+      }
+
+      setMessages((m) => [
+        ...m,
+        inputChat("user", `Selected ${suggestion.label}`),
+      ]);
+
+      dispatchBooking({
+        type: ACTION_TYPES.SET_BOOKING_CONTEXT,
+        service,
+        date: suggestion.date,
+        time: suggestion.time,
+        contactDraft: meta?.contact ?? null,
+      });
+
+      setEntryPhase(ENTRY_PHASES.NONE);
+      setMode(MODES.APPOINTMENT);
+    },
+    [booking.service, dispatchBooking, setEntryPhase, setMode],
+  );
+
+  const handleShowMoreOptions = useCallback(
+    (meta) => {
+      const service = meta?.service || booking.service;
+      const date = meta?.dateContext;
+
+      if (!service || !date) {
+        dispatchBooking({ type: ACTION_TYPES.START_BOOKING });
+        setEntryPhase(ENTRY_PHASES.NONE);
+        setMode(MODES.APPOINTMENT);
+        return;
+      }
+
+      setMessages((m) => [...m, inputChat("user", "Show more options")]);
+
+      dispatchBooking({
+        type: ACTION_TYPES.SET_BOOKING_DATE_CONTEXT,
+        service,
+        date,
+        contactDraft: meta?.contact ?? null,
+      });
+
+      setEntryPhase(ENTRY_PHASES.NONE);
+      setMode(MODES.APPOINTMENT);
+    },
+    [booking.service, dispatchBooking, setEntryPhase, setMode],
+  );
 
   useEffect(() => {
     // HACK: [] on keypress, for debug reload storage
@@ -992,6 +1122,7 @@ export default function ChatWidget() {
         <div
           role="dialog"
           aria-modal="true"
+          aria-label="Support Assistant"
           className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[360px] flex-col rounded-xl bg-white shadow-2xl"
         >
           <ChatHeader
@@ -1026,7 +1157,12 @@ export default function ChatWidget() {
           {/* NOTE: ChatMessages should show when booking step is not idle */}
 
           {showChatMessages && (
-            <ChatMessages messages={messages} isTyping={isTyping} />
+            <ChatMessages
+              messages={messages}
+              isTyping={isTyping}
+              onSuggestionClick={handleSuggestionClick}
+              onShowMore={handleShowMoreOptions}
+            />
           )}
 
           {mode === MODES.MANAGE && (
@@ -1038,9 +1174,11 @@ export default function ChatWidget() {
               onExit={() => {
                 setMode(MODES.ENTRY);
                 setEntryPhase(ENTRY_PHASES.ROOT);
+                setAiLookupAppointment(null);
               }}
               aiUnlocked={aiUnlocked}
               onNeedHelp={handleNeedHelp}
+              initialAppointment={aiLookupAppointment}
             />
           )}
 
@@ -1206,7 +1344,7 @@ function ChatHeader({ onClose, isPortfolio }) {
   );
 }
 
-function ChatMessages({ messages, isTyping }) {
+function ChatMessages({ messages, isTyping, onSuggestionClick, onShowMore }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
@@ -1217,7 +1355,12 @@ function ChatMessages({ messages, isTyping }) {
     <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
       <div className="space-y-4">
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} />
+          <MessageBubble
+            key={m.id}
+            message={m}
+            onSuggestionClick={onSuggestionClick}
+            onShowMore={onShowMore}
+          />
         ))}
 
         {isTyping && (
@@ -1230,33 +1373,101 @@ function ChatMessages({ messages, isTyping }) {
   );
 }
 
-function MessageBubble({ message }) {
+function MessageBubble({ message, onSuggestionClick, onShowMore }) {
   const isUser = message.role === "user";
+  const meta = message.meta;
+  const intent = typeof meta?.intent === "string" ? meta.intent : "";
+  const allowMarkdown = intent.includes("question");
 
   return (
-    <>
-      <div
-        className={`max-w-[85%] ${isUser ? "ml-auto text-right" : "text-left"}`}
-      >
-        <div className="mb-1 text-xs text-gray-500">
-          {isUser ? "You" : "Support Assistant"} •{" "}
-          {formatTime(message.timestamp)}
-        </div>
-
-        <div
-          className={`rounded-lg px-3 py-2 text-sm ${
-            isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
-          }`}
-        >
-          {message.content}
-        </div>
+    <div
+      className={`max-w-[85%] ${isUser ? "ml-auto text-right" : "text-left"}`}
+    >
+      <div className="mb-1 text-xs text-gray-500">
+        {isUser ? "You" : "Support Assistant"} • {formatTime(message.timestamp)}
       </div>
-    </>
+
+      <div
+        className={`rounded-lg px-3 py-2 text-sm ${
+          isUser ? "bg-primary text-white" : "bg-gray-100 text-slate-900"
+        }`}
+      >
+        {isUser || !allowMarkdown ? (
+          message.content
+        ) : (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+              ul: ({ children }) => (
+                <ul className="list-disc pl-5 mb-2 last:mb-0">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="list-decimal pl-5 mb-2 last:mb-0">{children}</ol>
+              ),
+              li: ({ children }) => (
+                <li className="mb-1 last:mb-0">{children}</li>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold">{children}</strong>
+              ),
+              em: ({ children }) => <em className="italic">{children}</em>,
+              a: ({ href, children }) => (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline text-primary"
+                >
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
+        )}
+      </div>
+
+      {!isUser && meta && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {meta.suggestions?.map((s) => (
+            <button
+              key={`${s.date}-${s.time}`}
+              onClick={() => onSuggestionClick(s, meta)}
+              className="rounded-full border border-primary px-3 py-1 text-xs text-primary hover:bg-primary/5"
+            >
+              {s.label}
+            </button>
+          ))}
+
+          {meta.uiAction === "show_more_for_date" && (
+            <button
+              onClick={() => onShowMore(meta)}
+              className="rounded-full border border-slate-400 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+            >
+              Show more options
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 function ChatInput({ onSend, disabled }) {
   const [value, setValue] = useState("");
+  const textareaRef = useRef(null);
+
+  const resize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 20;
+    const maxHeight = lineHeight * 3 + 8;
+    const next = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${next}px`;
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -1265,17 +1476,30 @@ function ChatInput({ onSend, disabled }) {
 
     onSend(value.trim());
     setValue("");
+    requestAnimationFrame(resize);
   };
 
   return (
     <form onSubmit={submit} className="border-t p-3">
-      <div className="flex gap-2">
-        <input
+      <div className="flex gap-2 items-end">
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          aria-label="Chat message"
+          onChange={(e) => {
+            setValue(e.target.value);
+            resize();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit(e);
+            }
+          }}
           placeholder="Type your message..."
           disabled={disabled}
-          className="flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="flex-1 resize-none rounded-md border px-3 py-2 text-sm leading-5 focus:outline-none focus:ring-2 focus:ring-primary"
         />
         <ChatTooltip content="Send Message">
           <button type="submit" disabled={disabled}>
@@ -1401,7 +1625,15 @@ function AppointmentDetailsHeader({
   );
 }
 
-function DetailsForm({ service, date, time, onSubmit, onBack }) {
+function DetailsForm({
+  service,
+  date,
+  time,
+  onSubmit,
+  onBack,
+  initialFullName = "",
+  initialEmail = "",
+}) {
   const serviceLabel = useMemo(() => {
     switch (service) {
       case "consultation":
@@ -1420,9 +1652,17 @@ function DetailsForm({ service, date, time, onSubmit, onBack }) {
     });
   }, [date]);
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState(initialFullName);
+  const [email, setEmail] = useState(initialEmail);
   const canSubmit = fullName.trim() && email.trim();
+
+  useEffect(() => {
+    setFullName(initialFullName || "");
+  }, [initialFullName]);
+
+  useEffect(() => {
+    setEmail(initialEmail || "");
+  }, [initialEmail]);
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-start">
@@ -1559,13 +1799,13 @@ function MessageRetry({ onRetry, onReturn }) {
           className="text-slate-700 gap-1 p-2 hover:bg-primary/5 rounded-full underline"
           onClick={onRetry}
         >
-          Retry
+          Try Again
         </button>
         <button
           className="text-slate-700 gap-1 p-2 hover:bg-primary/5 rounded-full underline"
           onClick={onReturn}
         >
-          Return to Options
+          Back to Options
         </button>
       </div>
     </div>
@@ -1739,6 +1979,8 @@ function BookingFlow({
           service={booking.service}
           date={booking.date}
           time={booking.time}
+          initialFullName={booking.contactDraft?.fullName || ""}
+          initialEmail={booking.contactDraft?.email || ""}
           onSubmit={(contact) =>
             dispatchBooking({ type: ACTION_TYPES.SUBMIT_DETAILS, contact })
           }
@@ -2111,9 +2353,12 @@ function ManageFlow({
   onExit,
   aiUnlocked,
   onNeedHelp,
+  initialAppointment,
 }) {
-  const [step, setStep] = useState(MANAGE_STEPS.CODE);
-  const [appointment, setAppointment] = useState(null);
+  const [step, setStep] = useState(
+    initialAppointment ? MANAGE_STEPS.DETAILS : MANAGE_STEPS.CODE,
+  );
+  const [appointment, setAppointment] = useState(initialAppointment);
   const [error, setError] = useState(null);
   const [manageResult, setManageResult] = useState(null);
 
@@ -2125,6 +2370,13 @@ function ManageFlow({
   const [availabilityTimedOut, setAvailabilityTimedOut] = useState(false);
 
   const [manageAction, setManageAction] = useState(null);
+
+  useEffect(() => {
+    if (initialAppointment) {
+      setAppointment(initialAppointment);
+      setStep(MANAGE_STEPS.DETAILS);
+    }
+  }, [initialAppointment]);
 
   function mapAppointmentServiceToKey(serviceLabel) {
     const normalized = serviceLabel.toLowerCase();
@@ -2722,7 +2974,7 @@ function ConfirmCancelPanel({ onConfirm, onBack }) {
           onClick={onBack}
           className="rounded-full border px-4 py-2 text-sm hover:bg-primary/5"
         >
-          Go Back
+          Back
         </button>
         <button
           onClick={onConfirm}
@@ -2745,13 +2997,13 @@ function ManageActionResult({ title, message, onBack, onExit }) {
           onClick={onBack}
           className="rounded-full border px-4 py-2 text-sm hover:bg-primary/5"
         >
-          Go Back to Details
+          Back to Details
         </button>
         <button
           onClick={onExit}
           className="rounded-full bg-primary text-white px-4 py-2 text-sm hover:bg-primary/90"
         >
-          Return to Chat
+          Back to Chat
         </button>
       </div>
     </div>
@@ -2799,9 +3051,11 @@ function ErrorMessage({
   showNeedHelp,
   onNeedHelp,
 }) {
-  if (DEV) console.log("show need help", showNeedHelp);
   return (
-    <div className="flex flex-col items-center justify-center p-4 text-center flex-1">
+    <div
+      role="alert"
+      className="flex flex-col items-center justify-center p-4 text-center flex-1"
+    >
       <CircleAlert className="h-8 w-8 mb-2 text-red-500" />
       <p className="text-sm text-slate-600">{message}</p>
       {retryable && (
@@ -2811,14 +3065,14 @@ function ErrorMessage({
             disabled={isLoading}
             className={`rounded-full px-4 py-2 text-white text-sm ${isLoading ? "border border-slate-400 hover:bg-slate-100 cursor-not-allowed" : "bg-red-500 hover:bg-red-600"}`}
           >
-            {isLoading ? <Spinner label="Retrying..." /> : "Retry"}
+            {isLoading ? <Spinner label="Retrying..." /> : "Try Again"}
           </button>
           <button
             onClick={onCancel}
             disabled={isLoading}
             className="rounded-full border border-red-500 px-4 py-2 text-red-500 text-sm hover:bg-red-50"
           >
-            Cancel
+            Back
           </button>
           {showNeedHelp && (
             <button
@@ -2837,7 +3091,11 @@ function ErrorMessage({
 
 function Empty({ message, onRetry, onCancel }) {
   return (
-    <div className="flex flex-col items-center justify-center p-4 text-center flex-1">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center justify-center p-4 text-center flex-1"
+    >
       <CircleAlert className="h-8 w-8 mb-2 text-primary" />
       <p className="text-sm text-slate-600">{message}</p>
       <div className="flex gap-2 mt-4">
@@ -2855,7 +3113,7 @@ function Empty({ message, onRetry, onCancel }) {
             onClick={onCancel}
             className="rounded-full border border-slate-500 px-4 py-2 text-slate-700 text-sm hover:bg-slate-100"
           >
-            Go Back
+            Back
           </button>
         )}
       </div>

@@ -22,4 +22,7 @@ export const ACTION_TYPES = Object.freeze({
   LOOKUP_SUCCESS: "lookup_success",
   LOOKUP_FAILURE: "lookup_failure",
   DEV_FORCE_SUBMIT: "dev_force_submit",
+
+  SET_BOOKING_CONTEXT: "set_booking_context",
+  SET_BOOKING_DATE_CONTEXT: "set_booking_date_context",
 });
