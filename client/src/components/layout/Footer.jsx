@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Brain, Mail, Phone, MapPin, Facebook, Twitter, Instagram } from 'lucide-react';
+import { SITE_CONTACT } from '../../lib/siteConfig';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -62,15 +63,15 @@ export default function Footer() {
             <ul className="space-y-3">
               <li className="flex items-center space-x-3">
                 <MapPin className="w-h h-5 text-primary flex-shrink-0 mt-0.5" />
-                <span className="text-sm">123 Wellness Street, Metro Manila, Philippines</span>
+                <span className="text-sm">{SITE_CONTACT.address}</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Phone className="w-h h-5 text-primary flex-shrink-0" />
-                <span className="text-sm">+639 123 4567</span>
+                <span className="text-sm">{SITE_CONTACT.phone}</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Mail className="w-h h-5 text-primary flex-shrink-0 mt-0.5" />
-                <span className="text-sm">hello@mindcare.ph</span>
+                <span className="text-sm">{SITE_CONTACT.email}</span>
               </li>
             </ul>
           </div>
