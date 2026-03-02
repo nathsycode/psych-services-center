@@ -35,4 +35,52 @@
   .bg-brand-gradient {
     @apply bg-gradient-to-r from-primary via-muted to-accent;
   }
+
+  .article-content h1,
+  .article-content h2,
+  .article-content h3,
+  .article-content h4 {
+    @apply mt-8 text-slate-900;
+  }
+
+  .article-content h1 {
+    @apply text-3xl font-bold;
+  }
+
+  .article-content h2 {
+    @apply text-2xl font-semibold;
+  }
+
+  .article-content h3 {
+    @apply text-xl font-semibold;
+  }
+
+  .article-content p {
+    @apply mt-4 leading-8 text-slate-700;
+  }
+
+  .article-content ul,
+  .article-content ol {
+    @apply mt-4 space-y-2 pl-6 text-slate-700;
+  }
+
+  .article-content a {
+    @apply font-medium text-primary underline decoration-primary/40 underline-offset-2 transition hover:text-accent;
+  }
+
+  .article-content blockquote {
+    @apply mt-4 border-l-4 border-primary/30 bg-slate-50 px-4 py-3 text-slate-700;
+  }
+
+  .article-content pre {
+    @apply mt-4 overflow-x-auto rounded-xl bg-slate-900 p-4 text-sm text-slate-100;
+  }
+
+  .article-content code {
+    @apply rounded bg-slate-100 px-1.5 py-0.5 text-sm text-slate-800;
+  }
+
+  .article-content pre code {
+    @apply bg-transparent p-0 text-slate-100;
+  }
 }

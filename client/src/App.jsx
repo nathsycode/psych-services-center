@@ -5,6 +5,7 @@ import Home from './pages/Home.jsx'
 import Booking from './pages/Booking.jsx'
 import About from './pages/About.jsx'
 import Articles from './pages/Articles.jsx'
+import ArticleDetail from './pages/ArticleDetail.jsx'
 import Contact from './pages/Contact.jsx'
 import ChatWidget from './components/chat/ChatWidget.jsx'
 
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/booking" element={<Booking />} />
             <Route path="/about" element={<About />} />
             <Route path="/articles" element={<Articles />} />
+            <Route path="/articles/:slug" element={<ArticleDetail />} />
             <Route path="/contact" element={<Contact />} />
 
           </Routes>
