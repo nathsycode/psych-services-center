@@ -1,9 +1,43 @@
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Clipboard, Video, Award, Shield, Calendar, Heart } from "lucide-react";
 import useIO from "../../hooks/useIO";
 
 export default function Hero() {
   const { ref, isVisible } = useIO(0.1, null);
+  const sectionRef = useRef(null);
+  const [parallaxY, setParallaxY] = useState(0);
+
+  useEffect(() => {
+    let rafId = null;
+
+    const updateParallax = () => {
+      if (!sectionRef.current) return;
+      const rect = sectionRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || 1;
+      const centerOffset = rect.top + rect.height / 2 - viewportHeight / 2;
+      const progress = Math.max(-1, Math.min(1, centerOffset / viewportHeight));
+      setParallaxY(progress * 30);
+    };
+
+    const handleScroll = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        updateParallax();
+        rafId = null;
+      });
+    };
+
+    updateParallax();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
 
   const features = [
     {
@@ -34,14 +68,20 @@ export default function Hero() {
 
   return (
     <section
-      ref={ref}
+      ref={(node) => {
+        ref.current = node;
+        sectionRef.current = node;
+      }}
       className="relative min-h-[90vh] md:h-screen py-16 md:py-24 overflow-hidden w-full flex items-center"
     >
       <div className="absolute inset-0 overflow-hidden">
         <img
           src="/images/therapist-2.jpg"
           alt="therapist background"
-          className={`absolute w-full h-full object-cover filter saturate-50 brightness-75 blur-sm transform transition-all duration-700 ${isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
+          className={`absolute w-full h-full object-cover filter saturate-50 brightness-75 blur-sm transition-all duration-700 will-change-transform ${
+            isVisible ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ transform: `translateY(${parallaxY}px) scale(1.12)` }}
         />
         <div className="absolute inset-0 bg-black/40" />
         {/* <div className="absolute -top-40 -right-40 bg-primary/10 rounded-full blur-3xl" /> */}
