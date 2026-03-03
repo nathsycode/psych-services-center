@@ -1,5 +1,5 @@
 import { Video, Clipboard, X } from 'lucide-react';
-import ServicesData from '../../data/services'
+import ServicesData from "../../data/services.json";
 import useIO from '../../hooks/useIO'
 
 export function ServiceSelection({ selectedService, onServiceChange }) {

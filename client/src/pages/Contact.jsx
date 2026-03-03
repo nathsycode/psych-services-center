@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, Mail, MapPin, Phone } from 'lucide-react';
 import { submitContactForm } from '../lib/contactApi';
 import { SITE_CONTACT } from '../lib/siteConfig';
+import { getInitialMode, isPortfolioMode } from '../lib/appMode.js';
 
 const VIBER_TEMPLATE_MESSAGE = `Hello MindCare Center, I'd like to ask about your mental health services.`;
 const PHONE_COUNTRIES = [
@@ -75,6 +76,8 @@ export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [appMode] = useState(getInitialMode());
+  const isPortfolio = isPortfolioMode(appMode);
   const viberHref = `viber://chat?number=${encodeURIComponent(SITE_CONTACT.phoneE164)}&text=${encodeURIComponent(VIBER_TEMPLATE_MESSAGE)}`;
 
   const handleChange = (event) => {
@@ -119,6 +122,13 @@ export default function Contact() {
     if (formData.company.trim()) {
       setIsSuccess(true);
       setFormData(initialFormState);
+      return;
+    }
+
+    if (isPortfolio) {
+      setIsSuccess(true);
+      setFormData(initialFormState);
+      setErrors({});
       return;
     }
 
@@ -169,6 +179,11 @@ export default function Contact() {
             Taking the first step can feel difficult. Share your concerns with us,
             and our team will guide you toward compassionate, professional support.
           </p>
+          {isPortfolio && (
+            <p className="mt-5 rounded-xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 text-sm text-amber-900 backdrop-blur-sm">
+              Portfolio mode notice: You can submit this form for demonstration, but it will not send data to a live clinical service.
+            </p>
+          )}
         </div>
 
         <div className="mt-12 grid gap-8 lg:grid-cols-3">
@@ -184,8 +199,9 @@ export default function Contact() {
                 role="status"
                 aria-live="polite"
               >
-                Thank you for reaching out. Our team will respond within 24 hours. If
-                your matter is urgent, please contact emergency services.
+                {isPortfolio
+                  ? 'thank you for sumbitting your response - please note this functionality is currently disabled.'
+                  : 'Thank you for reaching out. Our team will respond within 24 hours. If your matter is urgent, please contact emergency services.'}
               </p>
             )}
 

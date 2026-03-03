@@ -6,17 +6,20 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { ServiceSelection } from '../components/booking/ServiceSelection.jsx';
 import { CalendarEmbed } from '../components/booking/CalendarEmbed.jsx';
-import servicesData from '../data/services';
+import servicesData from "../data/services.json";
 import useIO from '../hooks/useIO.js';
 import { Video, Clipboard } from 'lucide-react';
+import { getInitialMode, isPortfolioMode } from "../lib/appMode.js";
 
 export default function Booking() {
   const { ref, isVisible } = useIO(0.1, null);
   const [calendarLoaded, setCalendarLoaded] = useState(false);
   const location = useLocation();
   const [selectedService, setSelectedService] = useState(null);
+  const [appMode] = useState(getInitialMode());
   const prevService = useRef(null);
   const calendarRef = useRef(null);
+  const shouldBlockBooking = isPortfolioMode(appMode);
 
   const handleServiceChange = (service) => {
     setSelectedService(prev => (prev === service ? null : service));
@@ -91,6 +94,7 @@ export default function Booking() {
           <CalendarEmbed
             serviceData={serviceData}
             onLoad={() => setCalendarLoaded(true)}
+            disableInteraction={shouldBlockBooking}
           />
         )}
 
