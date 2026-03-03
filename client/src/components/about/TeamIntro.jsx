@@ -177,19 +177,19 @@ export default function TeamIntro() {
         <div
           data-item-id="3"
           data-delay="500"
-          className={`rounded-3xl border border-primary/20 bg-gradient-to-br from-white via-sky-50 to-white p-10 shadow-[0_25px_60px_-40px_rgba(15,23,42,0.5)] transition-all duration-700 ${
+          className={`rounded-3xl border border-primary/20 p-10 group hover:bg-primary transition-all duration-700 ${
             visibleItems["3"]
               ? "opacity-100 translate-y-0"
               : "opacity-0 translate-y-8"
           }`}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary/70">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-primary/70 group-hover:text-white transition-colors duration-300">
             Mission
           </p>
-          <h2 className="mt-4 text-2xl font-semibold text-slate-900">
+          <h2 className="mt-4 text-2xl font-semibold text-slate-900 group-hover:text-white transition-colors duration-300">
             A grounded commitment to care.
           </h2>
-          <p className="mt-3 text-lg text-slate-600">
+          <p className="mt-3 text-lg text-slate-600 group-hover:text-white transition-colors duration-300">
             To provide accessible, ethical, and personalized psychological
             services that empower individuals and communities toward mental
             wellness.
@@ -199,19 +199,19 @@ export default function TeamIntro() {
         <div
           data-item-id="4"
           data-delay="900"
-          className={`rounded-3xl border border-accent/20 bg-gradient-to-br from-white via-amber-50 to-white p-10 shadow-[0_25px_60px_-40px_rgba(15,23,42,0.5)] transition-all duration-700 ${
+          className={`rounded-3xl border border-accent/20 p-10 group hover:bg-accent transition-all duration-700 ${
             visibleItems["4"]
               ? "opacity-100 translate-y-0"
               : "opacity-0 translate-y-8"
           }`}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent/70">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent/70 group-hover:text-white transition-colors duration-300">
             Vision
           </p>
-          <h2 className="mt-4 text-2xl font-semibold text-slate-900">
+          <h2 className="mt-4 text-2xl font-semibold text-slate-900 group-hover:text-white transition-colors duration-300">
             A future where mental health is foundational.
           </h2>
-          <p className="mt-3 text-lg text-slate-600">
+          <p className="mt-3 text-lg text-slate-600 group-hover:text-white transition-colors duration-300">
             A society where mental health is valued as an essential part of
             human flourishing.
           </p>

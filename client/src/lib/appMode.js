@@ -4,32 +4,40 @@ export const APP_MODES = {
   DEMO: "demo",
 };
 
+function normalizeMode(value) {
+  if (value === APP_MODES.DEMO || value === APP_MODES.PORTFOLIO) return value;
+  return null;
+}
+
+const ENV_MODE = normalizeMode(import.meta.env.VITE_APP_MODE);
+
+export function canSwitchAppMode() {
+  // If mode is pinned via env, do not allow runtime switching.
+  if (ENV_MODE) return false;
+  return import.meta.env.DEV;
+}
+
 export function getInitialMode() {
+  if (ENV_MODE) return ENV_MODE;
+
   const urlParam = new URLSearchParams(window.location.search).get("mode");
 
-  if (
-    import.meta.env.DEV &&
-    (urlParam === APP_MODES.DEMO || urlParam === APP_MODES.PORTFOLIO)
-  ) {
+  if (import.meta.env.DEV && normalizeMode(urlParam)) {
     return urlParam;
   }
 
   if (import.meta.env.DEV) {
     const saved = localStorage.getItem(APP_MODE_KEY);
 
-    if (saved === APP_MODES.DEMO || saved === APP_MODES.PORTFOLIO) return saved;
+    if (normalizeMode(saved)) return saved;
   }
-
-  const envMode = import.meta.env.VITE_APP_MODE;
-
-  if (envMode === APP_MODES.DEMO || envMode === APP_MODES.PORTFOLIO)
-    return envMode;
 
   return import.meta.env.DEV ? APP_MODES.DEMO : APP_MODES.PORTFOLIO;
 }
 
 export function setAppMode(mode) {
-  if (!import.meta.env.DEV) return;
+  if (!canSwitchAppMode()) return;
+  if (!normalizeMode(mode)) return;
   localStorage.setItem(APP_MODE_KEY, mode);
 }
 
