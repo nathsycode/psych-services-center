@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Calendar, ChevronLeft, Clock, UserRound } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import { Link, useLocation, useParams } from "react-router-dom";
-import remarkGfm from "remark-gfm";
 import ShareButtons from "../components/articles/ShareButtons";
 import { getArticleBySlug } from "../lib/articlesApi";
 import { formatPublishedDate, formatReadingTime, getArticlePath, joinAuthorNames } from "../lib/articlesUi";
+
+const MarkdownContent = lazy(() => import("../components/common/MarkdownContent.jsx"));
 
 export default function ArticleDetail() {
   const { slug } = useParams();
@@ -141,7 +141,9 @@ export default function ArticleDetail() {
         aria-label="Article content"
       >
         {article.content ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{article.content}</ReactMarkdown>
+          <Suspense fallback={<p className="text-slate-600">Loading content...</p>}>
+            <MarkdownContent content={article.content} />
+          </Suspense>
         ) : (
           <p>This article does not have body content yet.</p>
         )}

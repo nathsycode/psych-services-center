@@ -49,7 +49,6 @@ export default function TeamMembers() {
         <TeamMemberCard
           key={i}
           member={member}
-          index={i}
           isActive={hoveredIndex === i}
           isDimmed={hoveredIndex !== null && hoveredIndex !== i}
           onHover={() => setHoveredIndex(i)}

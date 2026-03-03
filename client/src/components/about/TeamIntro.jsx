@@ -127,7 +127,7 @@ export default function TeamIntro() {
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="none"
           aria-label="MindCare Center introduction video"
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-slate-900/50 via-slate-900/15 to-transparent" />

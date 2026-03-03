@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useState,
   useEffect,
   useRef,
@@ -27,8 +29,6 @@ import {
   Menu,
 } from "lucide-react";
 import { sendChatMessage } from "../../lib/chatApi";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   APP_MODES,
   canSwitchAppMode,
@@ -37,9 +37,31 @@ import {
   setAppMode,
 } from "../../lib/appMode.js";
 import { ACTION_TYPES, MODES } from "./chatConstants.js";
-import { Tooltip, Form } from "radix-ui";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import * as Form from "@radix-ui/react-form";
 import useDevShortcuts from "../../hooks/useDevShortcuts";
 import MOCKS from "../../lib/mocks.js";
+
+const MarkdownContent = lazy(() => import("../common/MarkdownContent.jsx"));
+
+const CHAT_MARKDOWN_COMPONENTS = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc pl-5 mb-2 last:mb-0">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 last:mb-0">{children}</ol>,
+  li: ({ children }) => <li className="mb-1 last:mb-0">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline text-primary"
+    >
+      {children}
+    </a>
+  ),
+};
 
 const STORAGE_KEY = "chat_widget_state";
 const VITE_CALENDAR_AVAILABILITY_URL = import.meta.env
@@ -671,7 +693,6 @@ export default function ChatWidget() {
   );
 
   const [aiUnlocked, setAiUnlocked] = useState(false);
-  const [aiUnlockReason, setAiUnlockReason] = useState(null);
   const [aiLookupAppointment, setAiLookupAppointment] = useState(null);
 
   const [aiErrorActive, setAiErrorActive] = useState(false);
@@ -680,10 +701,9 @@ export default function ChatWidget() {
   const isPortfolio = isPortfolioMode(appMode);
 
   const handleNeedHelp = useCallback(
-    (reason) => {
+    () => {
       if (!isPortfolio) {
         setAiUnlocked(true);
-        setAiUnlockReason(reason || null);
       }
       setMode(MODES.CHAT);
     },
@@ -1396,37 +1416,12 @@ function MessageBubble({ message, onSuggestionClick, onShowMore }) {
         {isUser || !allowMarkdown ? (
           message.content
         ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-              ul: ({ children }) => (
-                <ul className="list-disc pl-5 mb-2 last:mb-0">{children}</ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="list-decimal pl-5 mb-2 last:mb-0">{children}</ol>
-              ),
-              li: ({ children }) => (
-                <li className="mb-1 last:mb-0">{children}</li>
-              ),
-              strong: ({ children }) => (
-                <strong className="font-semibold">{children}</strong>
-              ),
-              em: ({ children }) => <em className="italic">{children}</em>,
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline text-primary"
-                >
-                  {children}
-                </a>
-              ),
-            }}
-          >
-            {message.content}
-          </ReactMarkdown>
+          <Suspense fallback={message.content}>
+            <MarkdownContent
+              content={message.content}
+              components={CHAT_MARKDOWN_COMPONENTS}
+            />
+          </Suspense>
         )}
       </div>
 

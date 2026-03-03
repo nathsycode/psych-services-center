@@ -21,7 +21,6 @@ function usePrefersReducedMotion() {
 
 export default function TeamMemberCard({
   member,
-  index,
   isActive,
   isDimmed,
   onHover,
@@ -101,7 +100,7 @@ export default function TeamMemberCard({
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="none"
           aria-label={`${member.name} introduction video`}
         />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-slate-900/40 via-slate-900/10 to-transparent" />
