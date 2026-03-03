@@ -31,6 +31,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   APP_MODES,
+  canSwitchAppMode,
   getInitialMode,
   isPortfolioMode,
   setAppMode,
@@ -1130,7 +1131,7 @@ export default function ChatWidget() {
             isPortfolio={isPortfolio}
           />
 
-          {import.meta.env.DEV && (
+          {canSwitchAppMode() && (
             <button
               className="fixed bottom-12 px-2 py-2 border border-red-400 text-slate-700 bg-white text-sm rounded-full"
               onClick={() => {
