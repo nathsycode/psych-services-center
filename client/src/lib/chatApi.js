@@ -2,7 +2,6 @@ const DEFAULT_TIMEOUT = 15_000;
 const DEV = import.meta.env.DEV;
 const VITE_CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL;
 const DEFAULT_INTENT = "general";
-// const VITE_CHAT_API_URL = import.meta.env.VITE_TEST_CHAT_API_URL;
 
 const normalizeChatResponse = (data) => {
   const payload = Array.isArray(data) ? data[0] : data;
@@ -43,27 +42,23 @@ export async function sendChatMessage({
   if (!VITE_CHAT_API_URL) throw new Error("Missing VITE_CHAT_API_URL");
 
   try {
-    const res = await fetch(
-      VITE_CHAT_API_URL,
-      // import.meta.env.VITE_CHAT_API_URL
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          sessionId,
-          message,
-          messages,
-          page,
-          flow,
-          aiUnlockReason,
-          lastErrorCode,
-          timezone,
-        }),
+    const res = await fetch(VITE_CHAT_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      signal: controller.signal,
+      body: JSON.stringify({
+        sessionId,
+        message,
+        messages,
+        page,
+        flow,
+        aiUnlockReason,
+        lastErrorCode,
+        timezone,
+      }),
+    });
 
     if (!res.ok) {
       throw new Error(`CHAT_API_ERROR_${res.status}`);
