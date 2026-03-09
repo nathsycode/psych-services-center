@@ -54,6 +54,25 @@ export default function Home() {
                 This website is a demonstration project and does not provide
                 real clinical services.
               </p>
+              <p className="mt-3 text-xs leading-relaxed text-slate-200">
+                Please visit this link for a video walkthrough:{" "}
+                <a
+                  href="https://www.youtube.com/playlist?list=PLm9QvqA1_01_PPYLff-U43KSBiC8kR-rP"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium underline decoration-white/70 underline-offset-2 hover:text-white"
+                >
+                  YouTube playlist
+                </a>
+                . You may also contact me at{" "}
+                <a
+                  href="mailto:nathsycode@gmail.com"
+                  className="font-medium underline decoration-white/70 underline-offset-2 hover:text-white"
+                >
+                  nathsycode@gmail.com
+                </a>
+                .
+              </p>
               <p className="mt-2 text-xs text-slate-200">
                 Scroll down to dismiss this notice, or continue below.
               </p>
